@@ -1,0 +1,81 @@
+<resources>
+    <string name="app_name">Telegram Channel Blocker</string>
+    <string name="accessibility_service_description">Secara teknis bisa mengakses semua aplikasi, tapi HANYA memproses aplikasi Telegram resmi (untuk mendeteksi channel di daftar blokir Anda) dan aplikasi klon/kustom yang Anda daftarkan sendiri di dalam aplikasi ini (untuk ditutup otomatis). Aplikasi lain di luar itu diabaikan sepenuhnya oleh kode aplikasi.</string>
+
+    <string name="status_active">AKTIF</string>
+    <string name="status_inactive">NONAKTIF</string>
+    <string name="service_active">Aktif</string>
+    <string name="service_inactive">Belum aktif</string>
+
+    <string name="label_status">Status Pemblokiran</string>
+    <string name="mode_off">Mati</string>
+    <string name="mode_normal">Normal</string>
+    <string name="mode_strict">Ketat</string>
+    <string name="label_service">Accessibility Service</string>
+    <string name="label_blocked_list">Daftar Channel yang Diblokir</string>
+
+    <string name="btn_add_channel">+ Tambah Channel</string>
+    <string name="btn_edit">Edit</string>
+    <string name="btn_delete">Hapus</string>
+    <string name="btn_enable_service">Aktifkan Accessibility Service</string>
+    <string name="btn_save">Simpan</string>
+    <string name="btn_cancel">Batal</string>
+
+    <string name="hint_channel_username">Username channel, contoh: @argo</string>
+    <string name="hint_channel_name">Nama tampilan persis, contoh: Bot Berita</string>
+    <string name="type_username">Username</string>
+    <string name="type_channel_name">Nama Tampilan</string>
+    <string name="dialog_add_title">Tambah Channel</string>
+    <string name="dialog_edit_title">Edit Channel</string>
+
+    <string name="empty_list">Belum ada channel yang diblokir</string>
+
+    <string name="service_instructions">Untuk mulai memblokir, aktifkan layanan aksesibilitas aplikasi ini di:\nSetelan → Aksesibilitas → Telegram Channel Blocker → Aktifkan.</string>
+
+    <string name="toast_invalid_username">Username tidak valid. Gunakan format @namachannel</string>
+    <string name="toast_duplicate">Channel ini sudah ada di daftar</string>
+    <string name="toast_deleted">Channel dihapus</string>
+        <string name="label_uninstall_protection">Cegah Uninstall</string>
+    <string name="uninstall_protection_active">Aktif</string>
+    <string name="uninstall_protection_inactive">Nonaktif</string>
+    <string name="btn_enable_uninstall_protection">Aktifkan Perlindungan</string>
+    <string name="device_admin_explanation">Perlu izin admin perangkat agar aplikasi tidak bisa dihapus langsung tanpa langkah tambahan.</string>
+    <string name="device_admin_enabled">Perlindungan uninstall diaktifkan</string>
+    <string name="device_admin_disabled">Perlindungan uninstall dinonaktifkan</string>
+           <string name="random_gate_title">Ketik huruf yang tampil di bawah, satu per satu:</string>
+    <string name="random_gate_hint">Masukkan teks acak</string>
+    <string name="random_gate_wrong">Karakter salah</string>
+    <string name="random_gate_progress">%1$d / %2$d</string>
+
+    <!-- Fitur: Aplikasi/klon tambahan (custom packages) -->
+    <string name="label_custom_packages">Aplikasi/Klon Tambahan</string>
+    <string name="custom_packages_hint">Aplikasi di daftar ini akan langsung ditutup (kembali ke Home) saat dibuka, mengikuti Mode Pemblokiran di atas. Tidak ada deteksi channel khusus untuk aplikasi-aplikasi ini.</string>
+    <string name="btn_add_package">+ Tambah Aplikasi</string>
+    <string name="empty_packages">Belum ada aplikasi tambahan</string>
+    <string name="dialog_add_package_title">Tambah Aplikasi</string>
+    <string name="dialog_add_package_hint">Masukkan package name aplikasi (contoh: com.whatsapp), atau langsung bagikan (Share) halaman aplikasi tersebut dari Play Store ke Telegram Channel Blocker.</string>
+    <string name="hint_package_name">Package name, contoh: com.whatsapp</string>
+    <string name="toast_invalid_package">Package name tidak valid atau sudah ada di daftar</string>
+    <string name="toast_share_not_recognized">Tidak menemukan package name dari yang dibagikan</string>
+
+    <!-- Fitur: Konfirmasi Mode Ketat -->
+    <string name="confirm_strict_title">Aktifkan Mode Ketat?</string>
+    <string name="confirm_strict_message">Setelah aktif, menurunkan mode (ke Normal/Mati) serta mengedit atau menghapus channel akan memerlukan mengetik ulang teks acak sebagai friksi tambahan. Lanjutkan?</string>
+    <string name="btn_activate">Aktifkan</string>
+
+    <!-- Fitur: Export / Import -->
+    <string name="label_backup">Backup Data</string>
+    <string name="btn_export">Export Data</string>
+    <string name="btn_import">Import Data</string>
+    <string name="dialog_export_title">Export Data</string>
+    <string name="dialog_export_hint">Salin atau bagikan teks di bawah ini untuk menyimpan cadangan daftar channel, mode, dan aplikasi tambahan Anda saat ini. Tempel kembali lewat Import Data kapan pun diperlukan.</string>
+    <string name="btn_copy">Salin</string>
+    <string name="btn_share">Bagikan</string>
+    <string name="btn_close">Tutup</string>
+    <string name="toast_copied">Disalin ke clipboard</string>
+    <string name="dialog_import_title">Import Data</string>
+    <string name="dialog_import_hint">Tempel teks backup yang sebelumnya di-export. Ini akan MENGGANTI seluruh daftar channel, mode, dan aplikasi tambahan yang ada saat ini.</string>
+    <string name="hint_import_data">Tempel teks backup di sini</string>
+    <string name="toast_import_success">Data berhasil di-import</string>
+    <string name="toast_import_failed">Format data tidak valid, import dibatalkan</string>
+</resources>
