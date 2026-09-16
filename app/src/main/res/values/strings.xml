@@ -78,4 +78,14 @@
     <string name="hint_import_data">Tempel teks backup di sini</string>
     <string name="toast_import_success">Data berhasil di-import</string>
     <string name="toast_import_failed">Format data tidak valid, import dibatalkan</string>
+
+    <!-- Fitur: Browser + Website Blocking (Fase 1) -->
+    <string name="label_website_blocking">Website yang Diblokir</string>
+    <string name="website_blocking_hint">Hanya Google Chrome yang diizinkan sebagai browser — browser lain (Firefox, Samsung Internet, Edge, dst.) otomatis ditutup. Domain di bawah ini, DITAMBAH sejumlah domain dewasa bawaan, akan diblokir kalau dibuka lewat Chrome. Ini murni pencocokan teks address bar secara lokal di perangkat — lihat catatan keterbatasan di README.</string>
+    <string name="btn_add_domain">+ Tambah Domain</string>
+    <string name="empty_domains">Belum ada domain custom (domain dewasa bawaan tetap aktif)</string>
+    <string name="dialog_add_domain_title">Tambah Domain</string>
+    <string name="dialog_add_domain_hint">Masukkan domain yang mau diblokir (contoh: example.com). Subdomain-nya ikut terblokir otomatis.</string>
+    <string name="hint_domain_name">Domain, contoh: example.com</string>
+    <string name="toast_invalid_domain">Domain tidak valid atau sudah ada di daftar</string>
 </resources>
