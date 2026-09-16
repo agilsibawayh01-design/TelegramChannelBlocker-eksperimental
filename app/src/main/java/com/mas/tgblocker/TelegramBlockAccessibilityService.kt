@@ -18,6 +18,17 @@ import android.view.accessibility.AccessibilityEvent
  * layarnya — tidak ada deteksi channel per-aplikasi untuk keduanya. Hanya
  * [OFFICIAL_PACKAGE] yang diproses lewat logic deteksi channel biasa di bawah.
  *
+ * UPGRADE Browser + Website blocking (tidak mengubah logic Telegram di atas):
+ * - [CHROME_PACKAGE] adalah satu-satunya browser yang DIIZINKAN. Saat Chrome
+ *   aktif, service membaca address bar (atau fallback ke teks layar) dan
+ *   membandingkannya dengan domain custom pengguna + [AdultDomainList]
+ *   bawaan lewat [WebsiteDetector] — kalau cocok, BACK.
+ * - [BROWSER_BLOCK_PACKAGES] berisi browser lain yang DIKENAL (Firefox,
+ *   Samsung Internet, Edge, dst) — diperlakukan sama seperti CLONE_PACKAGES,
+ *   langsung ditendang ke Home. Browser yang tidak ada di daftar ini masih
+ *   bisa diblokir lewat "Aplikasi/Klon Tambahan" (custom packages), sama
+ *   seperti aplikasi lain.
+ *
  * CATATAN PENTING soal cakupan: accessibility_service_config.xml TIDAK lagi
  * membatasi android:packageNames ke daftar tetap, supaya pengguna bisa
  * menambah aplikasi kustom secara dinamis tanpa perlu build ulang APK.
@@ -26,10 +37,12 @@ import android.view.accessibility.AccessibilityEvent
  * Setelan — itu wajar, bukan tanda ada yang salah. Secara teknis event dari
  * SEMUA aplikasi akan sampai ke [onAccessibilityEvent], tapi baris pertama
  * di bawah langsung mengabaikan total (return tanpa memproses apa pun)
- * setiap package yang bukan [OFFICIAL_PACKAGE], bukan anggota
- * [CLONE_PACKAGES], dan bukan salah satu package kustom yang pengguna
- * daftarkan sendiri lewat repository — jadi cakupan efektifnya tetap sama
- * sekecil sebelumnya, hanya sumber daftarnya yang sekarang dinamis.
+ * setiap package yang bukan [OFFICIAL_PACKAGE], bukan [CHROME_PACKAGE],
+ * bukan anggota [CLONE_PACKAGES]/[BROWSER_BLOCK_PACKAGES], dan bukan salah
+ * satu package kustom yang pengguna daftarkan sendiri lewat repository —
+ * jadi cakupan efektifnya tetap sekecil sebelumnya (plus Chrome & browser
+ * yang memang sengaja ditambahkan di upgrade ini), hanya sumber daftarnya
+ * yang sekarang dinamis.
  */
 class TelegramBlockAccessibilityService : AccessibilityService() {
 
@@ -61,6 +74,36 @@ class TelegramBlockAccessibilityService : AccessibilityService() {
             "ellipi.messenger",
             "belloworld.mercurygram"
         )
+
+        // Satu-satunya browser yang diizinkan.
+        private const val CHROME_PACKAGE = "com.android.chrome"
+
+        // Browser lain yang DIKENAL — langsung ditendang ke Home seperti klon
+        // Telegram. Non-exhaustive by design (lihat komentar kelas di atas);
+        // browser di luar daftar ini bisa ditambahkan lewat Custom Package.
+        private val BROWSER_BLOCK_PACKAGES = setOf(
+            "org.mozilla.firefox",
+            "org.mozilla.firefox_beta",
+            "org.mozilla.focus",
+            "org.mozilla.klar",
+            "com.sec.android.app.sbrowser",
+            "com.microsoft.emmx",
+            "com.opera.browser",
+            "com.opera.browser.beta",
+            "com.opera.mini.native",
+            "com.opera.gx",
+            "com.brave.browser",
+            "com.brave.browser_beta",
+            "com.duckduckgo.mobile.android",
+            "com.kiwibrowser.browser",
+            "com.vivaldi.browser",
+            "com.yandex.browser",
+            "com.UCMobile.intl",
+            "com.ucweb.browser",
+            "mark.via.gp",
+            "com.mmbox.xbrowser",
+            "com.android.browser"
+        )
     }
 
     override fun onCreate() {
@@ -74,20 +117,43 @@ class TelegramBlockAccessibilityService : AccessibilityService() {
         val pkg = event.packageName?.toString() ?: return
 
         // Lapisan keamanan utama: apa pun isi accessibility_service_config.xml,
-        // package selain OFFICIAL_PACKAGE, CLONE_PACKAGES, dan custom packages
-        // milik pengguna sendiri diabaikan TOTAL di sini, tanpa membaca layar
-        // sama sekali.
+        // package selain OFFICIAL_PACKAGE, CHROME_PACKAGE, CLONE_PACKAGES,
+        // BROWSER_BLOCK_PACKAGES, dan custom packages milik pengguna sendiri
+        // diabaikan TOTAL di sini, tanpa membaca layar sama sekali.
         val isOfficial = pkg == OFFICIAL_PACKAGE
-        val isCloneOrCustom = !isOfficial && (pkg in CLONE_PACKAGES || pkg in repository.getCustomPackages())
-        if (!isOfficial && !isCloneOrCustom) return
+        val isChrome = pkg == CHROME_PACKAGE
+        val isCloneOrCustom = !isOfficial && !isChrome &&
+            (pkg in CLONE_PACKAGES || pkg in BROWSER_BLOCK_PACKAGES || pkg in repository.getCustomPackages())
+        if (!isOfficial && !isChrome && !isCloneOrCustom) return
 
         if (repository.getMode() == BlockingMode.OFF) return
 
-        // Aplikasi klon atau aplikasi kustom: langsung tendang ke Home,
-        // tidak perlu baca layar sama sekali.
+        // Aplikasi klon, browser terlarang, atau aplikasi kustom: langsung
+        // tendang ke Home, tidak perlu baca layar sama sekali.
         if (isCloneOrCustom) {
-            Log.d(TAG, "Aplikasi klon/kustom terdeteksi ($pkg), kembali ke Home")
+            Log.d(TAG, "Aplikasi klon/browser terlarang/kustom terdeteksi ($pkg), kembali ke Home")
             performGlobalAction(GLOBAL_ACTION_HOME)
+            return
+        }
+
+        // Chrome: cek address bar terhadap domain blokir (custom + bawaan).
+        if (isChrome) {
+            val root = rootInActiveWindow ?: return
+            try {
+                val blockedDomains = repository.getBlockedDomains() + AdultDomainList.DOMAINS
+                val urlBarText = WebsiteDetector.findUrlBarText(root)
+                val candidateText = urlBarText ?: WebsiteDetector.collectAllTexts(root).joinToString(" ")
+
+                val matchedDomain = WebsiteDetector.findBlockedDomain(candidateText, blockedDomains)
+                if (matchedDomain != null) {
+                    Log.d(TAG, "Domain diblokir terdeteksi ($matchedDomain), menjalankan BACK")
+                    performGlobalAction(GLOBAL_ACTION_BACK)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error saat memproses layar Chrome", e)
+            } finally {
+                root.recycle()
+            }
             return
         }
 

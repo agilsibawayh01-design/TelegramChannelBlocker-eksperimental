@@ -30,6 +30,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var repository: BlockedChannelRepository
     private lateinit var adapter: ChannelAdapter
     private lateinit var packageAdapter: PackageAdapter
+    private lateinit var domainAdapter: DomainAdapter
     private var currentMode: BlockingMode = BlockingMode.NORMAL
 
     companion object {
@@ -65,10 +66,12 @@ class MainActivity : AppCompatActivity() {
         }
 
         setupPackageSection()
+        setupDomainSection()
         setupBackupSection()
 
         refreshList()
         refreshPackages()
+        refreshDomains()
         handleShareIntent(intent)
     }
 
@@ -82,6 +85,7 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         refreshList()
         refreshPackages()
+        refreshDomains()
         updateServiceStatus()
         updateUninstallProtectionStatus()
     }
@@ -485,6 +489,58 @@ class MainActivity : AppCompatActivity() {
         return match.groupValues[1]
     }
 
+    // ----- Fitur: Website yang Diblokir (domain custom, Fase 1 upgrade) -----
+    // Domain di sini digabung dengan AdultDomainList (bawaan) di service saat
+    // membandingkan address bar Chrome. Edit/hapus digate lewat guardIfStrict,
+    // sama seperti daftar channel & package.
+
+    private fun setupDomainSection() {
+        domainAdapter = DomainAdapter(
+            onDelete = { domain -> guardIfStrict { deleteBlockedDomain(domain) } }
+        )
+        binding.rvDomains.layoutManager = LinearLayoutManager(this)
+        binding.rvDomains.adapter = domainAdapter
+        binding.btnAddDomain.setOnClickListener { showAddDomainDialog() }
+    }
+
+    private fun refreshDomains() {
+        val domains = repository.getBlockedDomains()
+        domainAdapter.submitList(domains)
+        binding.tvEmptyDomains.visibility = if (domains.isEmpty()) View.VISIBLE else View.GONE
+    }
+
+    private fun showAddDomainDialog() {
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_add_domain, null)
+        val etDomainName = dialogView.findViewById<TextInputEditText>(R.id.etDomainName)
+
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.dialog_add_domain_title)
+            .setView(dialogView)
+            .setPositiveButton(R.string.btn_save) { _, _ ->
+                val input = etDomainName.text?.toString().orEmpty()
+                val added = repository.addBlockedDomain(input)
+                if (!added) {
+                    Toast.makeText(this, R.string.toast_invalid_domain, Toast.LENGTH_SHORT).show()
+                }
+                refreshDomains()
+            }
+            .setNegativeButton(R.string.btn_cancel, null)
+            .show()
+    }
+
+    private fun deleteBlockedDomain(domain: String) {
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.btn_delete)
+            .setMessage(domain)
+            .setPositiveButton(R.string.btn_delete) { _, _ ->
+                repository.deleteBlockedDomain(domain)
+                refreshDomains()
+                Toast.makeText(this, R.string.toast_deleted, Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton(R.string.btn_cancel, null)
+            .show()
+    }
+
     // ----- Fitur: Export / Import -----
     // Backup teks lokal (JSON), tanpa server. Import MENGGANTI seluruh
     // channel, mode, dan aplikasi tambahan yang ada saat ini, jadi digate
@@ -548,6 +604,7 @@ class MainActivity : AppCompatActivity() {
             reflectModeUI(currentMode)
             refreshList()
             refreshPackages()
+            refreshDomains()
             Toast.makeText(this, R.string.toast_import_success, Toast.LENGTH_SHORT).show()
         } else {
             Toast.makeText(this, R.string.toast_import_failed, Toast.LENGTH_SHORT).show()

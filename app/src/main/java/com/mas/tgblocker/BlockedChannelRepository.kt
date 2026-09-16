@@ -161,11 +161,58 @@ class BlockedChannelRepository(context: Context) {
         saveCustomPackages(current)
     }
 
+    // ----- Website yang Diblokir (domain custom) -----
+    // Digabung dengan AdultDomainList (bawaan) saat dicek di service —
+    // lihat TelegramBlockAccessibilityService. Yang disimpan di sini HANYA
+    // domain custom milik pengguna, bukan daftar bawaan.
+
+    fun getBlockedDomains(): List<String> {
+        val raw = prefs.getString(KEY_BLOCKED_DOMAINS, null) ?: return emptyList()
+        return try {
+            val arr = JSONArray(raw)
+            (0 until arr.length()).mapNotNull { i -> arr.optString(i).takeIf { it.isNotBlank() } }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    fun saveBlockedDomains(domains: List<String>) {
+        val arr = JSONArray()
+        domains.map { it.trim().lowercase().removePrefix("www.") }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .forEach { arr.put(it) }
+        prefs.edit().putString(KEY_BLOCKED_DOMAINS, arr.toString()).apply()
+    }
+
+    /** Validasi longgar bentuk domain: minimal ada satu titik, karakter domain valid. */
+    private val domainPattern =
+        Regex("^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)+$")
+
+    fun addBlockedDomain(rawValue: String): Boolean {
+        val clean = rawValue.trim().lowercase()
+            .removePrefix("https://").removePrefix("http://").removePrefix("www.")
+            .substringBefore("/")
+        if (clean.isBlank() || !domainPattern.matches(clean)) return false
+
+        val current = getBlockedDomains().toMutableList()
+        if (current.any { it.equals(clean, ignoreCase = true) }) return false
+        current.add(clean)
+        saveBlockedDomains(current)
+        return true
+    }
+
+    fun deleteBlockedDomain(domain: String) {
+        val current = getBlockedDomains().toMutableList()
+        current.removeAll { it.equals(domain, ignoreCase = true) }
+        saveBlockedDomains(current)
+    }
+
     // ----- Export / Import (backup teks lokal, tanpa server) -----
 
     fun exportData(): String {
         val obj = JSONObject()
-        obj.put("version", 1)
+        obj.put("version", 2)
         obj.put("mode", getMode().name)
 
         val channelsArr = JSONArray()
@@ -181,12 +228,18 @@ class BlockedChannelRepository(context: Context) {
         getCustomPackages().forEach { pkgArr.put(it) }
         obj.put("customPackages", pkgArr)
 
+        val domainArr = JSONArray()
+        getBlockedDomains().forEach { domainArr.put(it) }
+        obj.put("blockedDomains", domainArr)
+
         return obj.toString(2)
     }
 
     /**
-     * Mengganti SELURUH channel, mode, dan aplikasi tambahan dengan isi [json].
-     * Mengembalikan false (tanpa mengubah apa pun) kalau format tidak valid.
+     * Mengganti SELURUH channel, mode, aplikasi tambahan, dan domain blokir
+     * dengan isi [json]. Mengembalikan false (tanpa mengubah apa pun) kalau
+     * format tidak valid. Backward compatible dengan backup versi 1 (belum
+     * ada "blockedDomains" — dianggap kosong).
      */
     fun importData(json: String): Boolean {
         return try {
@@ -217,9 +270,15 @@ class BlockedChannelRepository(context: Context) {
                 pkgArr.optString(i).takeIf { it.isNotBlank() }
             }
 
+            val domainArr = obj.optJSONArray("blockedDomains") ?: JSONArray()
+            val domains = (0 until domainArr.length()).mapNotNull { i ->
+                domainArr.optString(i).takeIf { it.isNotBlank() }
+            }
+
             saveChannels(channels)
             setMode(mode)
             saveCustomPackages(packages)
+            saveBlockedDomains(domains)
             true
         } catch (e: Exception) {
             false
@@ -232,5 +291,6 @@ class BlockedChannelRepository(context: Context) {
         private const val KEY_MODE = "blocking_mode"
         private const val KEY_CHANNELS = "blocked_channels"
         private const val KEY_CUSTOM_PACKAGES = "custom_packages"
+        private const val KEY_BLOCKED_DOMAINS = "blocked_domains"
     }
 }
