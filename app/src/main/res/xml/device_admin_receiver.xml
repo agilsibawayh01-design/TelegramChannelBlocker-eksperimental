@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<device-admin xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-policies>
+        <!-- Tidak perlu policy apa pun (tidak mengunci layar, tidak menghapus data, dst).
+             Hanya memanfaatkan efek samping bawaan Android: aplikasi dengan Device Admin
+             aktif tidak bisa langsung di-uninstall sebelum admin dinonaktifkan dulu
+             lewat Setelan -> Keamanan -> Device Admin Apps. -->
+    </uses-policies>
+</device-admin>
