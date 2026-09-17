@@ -320,7 +320,7 @@
                     android:textColor="@color/text_secondary"
                     android:textSize="12sp" />
 
-                <com.google.android.material.materialswitch.MaterialSwitch
+                <com.google.android.material.switchmaterial.SwitchMaterial
                     android:id="@+id/switchContentDetection"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
