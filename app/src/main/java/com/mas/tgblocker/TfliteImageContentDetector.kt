@@ -21,28 +21,48 @@ import java.util.concurrent.Executors
  * [detect] selalu memanggil callback dengan [ImageContentDetector.SCORE_UNAVAILABLE]
  * — TIDAK PERNAH pura-pura menghasilkan skor kalau sebenarnya tidak ada model.
  *
- * CARA PASANG MODEL SUNGGUHAN (baca juga ringkasan chat untuk link/sumbernya):
- * 1. Sumber yang direkomendasikan: model TFLite hasil port Yahoo open_nsfw
- *    (lisensi BSD-3-Clause pada model aslinya; banyak port Android open-source
- *    memakai file model yang sama, ukuran ~6MB, input 224x224 RGB, output
- *    2 kelas [sfw, nsfw]).
- * 2. Taruh file itu persis di: app/src/main/assets/content_detector.tflite
- * 3. Di app/build.gradle.kts, pastikan blok `androidResources { noCompress += "tflite" }`
+ * MODEL YANG DIPAKAI: file `content_detector.tflite` yang sudah dipasang di
+ * project ini bersumber dari hoyaaaa/nsfw_detector_flutter (turunan
+ * yahoo/open_nsfw lewat open_nsfw_android, lisensi model BSD-3-Clause).
+ *
+ * SUDAH TERVERIFIKASI LANGSUNG dari file binernya (parse FlatBuffer manual,
+ * bukan cuma baca dokumentasi):
+ * - Tensor input: nama "input", shape [1,224,224,3], FLOAT32 — cocok
+ *   dengan [INPUT_SIZE]=224 di bawah.
+ * - Tensor output: nama "predictions", shape [1,2], FLOAT32, DAN memang
+ *   hasil operator SOFTMAX (bukan logit mentah) — jadi bisa langsung
+ *   dibandingkan ke threshold 0..1 tanpa softmax tambahan di kode.
+ * - Tensor "input" TIDAK melalui operator normalisasi apa pun di dalam
+ *   graph (langsung masuk ke operator PAD) — artinya preprocessing
+ *   (BGR + mean-subtraction) MEMANG WAJIB dilakukan di kode Kotlin ini,
+ *   bukan sudah ditangani model.
+ * - Arsitektur mengandung layer "fc_nsfw" bergaya ResNet/Caffe, konsisten
+ *   dengan asal-usul open_nsfw sebagai model Caffe (yang memang memakai
+ *   konvensi BGR + mean Caffe seperti di bawah).
+ *
+ * YANG TIDAK BISA diverifikasi dari file biner (murni konvensi training,
+ * tidak tersimpan di metadata tensor): urutan output[0]=SFW / output[1]=NSFW.
+ * Ini dipercaya dari dokumentasi publik proyek open_nsfw, bukan dibaca dari
+ * file-nya.
+ *
+ * 1. Kalau mau ganti model lain nanti, taruh persis di:
+ *    app/src/main/assets/content_detector.tflite
+ * 2. Di app/build.gradle.kts, pastikan blok `androidResources { noCompress += "tflite" }`
  *    ada (sudah ditambahkan) supaya file model tidak ikut terkompresi APK
  *    (kalau terkompresi, TFLite Interpreter gagal buka file-nya).
- * 4. Kalau model yang kamu pasang PUNYA BENTUK OUTPUT BEDA (misal 5 kelas
+ * 3. Kalau model yang kamu pasang PUNYA BENTUK OUTPUT BEDA (misal 5 kelas
  *    gaya GantMan/nsfw_model: drawings/hentai/neutral/porn/sexy), ubah
  *    [OUTPUT_MODE] ke [OutputMode.FIVE_CLASS_GANTMAN] dan sesuaikan urutan
  *    label di [FIVE_CLASS_LABELS] persis urutan output model itu.
  *
- * PENTING — INI ASUMSI, BUKAN VERIFIKASI: karena aku (asisten) tidak
- * pernah memegang file model sungguhan, angka INPUT_SIZE/MEAN/STD dan
- * urutan output di bawah ini berdasar dokumentasi publik proyek-proyek
- * open_nsfw-TFLite yang aku temukan, BUKAN dicek langsung dari file
- * biner-nya. Kalau ternyata meleset (mis. Interpreter error shape
- * mismatch saat run), sesuaikan konstanta di companion object ini —
- * jangan asumsikan kodenya salah total, biasanya cuma beda ukuran input
- * atau urutan output.
+ * CATATAN VERIFIKASI: paragraf di atas ("SUDAH TERVERIFIKASI LANGSUNG")
+ * berdasarkan file content_detector.tflite yang diupload ke sesi chat ini
+ * dan di-parse manual (FlatBuffer reader ditulis sendiri, karena sandbox
+ * tidak punya TensorFlow/tflite-runtime terpasang, dan tidak ada akses
+ * internet untuk instalasi). Kalau kamu mengganti file model ini dengan
+ * versi lain nanti TANPA meng-upload ulang ke chat untuk diverifikasi,
+ * anggap kembali sebagai asumsi sampai dicek ulang — jangan asumsikan
+ * verifikasi ini otomatis berlaku untuk file yang berbeda.
  */
 class TfliteImageContentDetector(context: Context) : ImageContentDetector {
 
@@ -129,13 +149,17 @@ class TfliteImageContentDetector(context: Context) : ImageContentDetector {
         val pixels = IntArray(INPUT_SIZE * INPUT_SIZE)
         bitmap.getPixels(pixels, 0, INPUT_SIZE, 0, 0, INPUT_SIZE, INPUT_SIZE)
 
+        // Preprocessing BGR + mean-subtraction (bukan RGB / -1..1), sesuai
+        // spesifikasi model dari hoyaaaa/nsfw_detector_flutter (turunan
+        // yahoo/open_nsfw lewat open_nsfw_android). Urutan channel yang
+        // ditulis ke buffer adalah B, G, R (BUKAN R, G, B).
         for (pixel in pixels) {
             val r = (pixel shr 16) and 0xFF
             val g = (pixel shr 8) and 0xFF
             val b = pixel and 0xFF
-            buffer.putFloat((r - MEAN) / STD)
-            buffer.putFloat((g - MEAN) / STD)
-            buffer.putFloat((b - MEAN) / STD)
+            buffer.putFloat(b - MEAN_B)
+            buffer.putFloat(g - MEAN_G)
+            buffer.putFloat(r - MEAN_R)
         }
         buffer.rewind()
         return buffer
@@ -156,8 +180,12 @@ class TfliteImageContentDetector(context: Context) : ImageContentDetector {
 
         // --- Sesuaikan kalau model yang kamu pasang beda spesifikasi ---
         private const val INPUT_SIZE = 224 // lebar/tinggi input model, dalam piksel
-        private const val MEAN = 127.5f    // normalisasi: (pixel - MEAN) / STD
-        private const val STD = 127.5f     // default ini -> rentang -1..1
+        // Mean subtraction ala VGG/Caffe (BGR), sesuai spesifikasi model
+        // yahoo/open_nsfw yang dipakai hoyaaaa/nsfw_detector_flutter.
+        // BUKAN normalisasi (x-127.5)/127.5 — itu keliru untuk model ini.
+        private const val MEAN_B = 103.939f
+        private const val MEAN_G = 116.779f
+        private const val MEAN_R = 123.68f
         private val OUTPUT_MODE = OutputMode.SFW_NSFW_BINARY
         // Kalau OUTPUT_MODE = FIVE_CLASS_GANTMAN, urutan label diasumsikan
         // alfabetis (drawings=0, hentai=1, neutral=2, porn=3, sexy=4) sesuai
