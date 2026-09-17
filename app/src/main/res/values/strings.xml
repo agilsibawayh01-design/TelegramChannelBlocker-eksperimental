@@ -97,4 +97,12 @@
     <string name="dialog_log_title">Log Deteksi Konten</string>
     <string name="dialog_log_empty">Belum ada deteksi tercatat.</string>
     <string name="btn_clear_log">Hapus Log</string>
+
+    <!-- Fitur: Deteksi Gambar AI (Fase 2b) -->
+    <string name="label_image_detection">Deteksi Gambar (AI)</string>
+    <string name="image_detection_hint">Screenshot berkala (bukan real-time per-frame) dianalisis model AI on-device untuk skor risiko konten. DEFAULT NONAKTIF. Kalau belum ada model TFLite terpasang di assets, toggle ini boleh dinyalakan tapi TIDAK akan berbuat apa-apa (status di bawah akan bilang "model belum terpasang").</string>
+    <string name="switch_image_detection">Aktifkan Deteksi Gambar (AI)</string>
+    <string name="image_detection_status_available">Model terpasang, deteksi gambar aktif</string>
+    <string name="image_detection_status_unavailable">Model belum terpasang — toggle ini belum berefek</string>
+    <string name="image_detection_status_unsupported">Perangkat ini di bawah Android 11 — fitur ini tidak didukung</string>
 </resources>
