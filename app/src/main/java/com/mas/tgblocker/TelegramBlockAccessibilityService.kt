@@ -121,6 +121,22 @@ class TelegramBlockAccessibilityService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        // PENTING: SELURUH isi fungsi ini dibungkus try/catch. Accessibility
+        // service jalan di proses utama aplikasi — kalau ada exception yang
+        // lolos sampai ke luar fungsi ini, Android akan meng-crash lalu
+        // otomatis me-restart service-nya berkali-kali ("app keeps
+        // stopping"/"terus berhenti" loop), bahkan waktu HP cuma didiamkan
+        // di homescreen. Menangkap semua Exception di sini membuat bug apa
+        // pun (di service ini maupun di detector-detector yang dipanggilnya)
+        // paling parah cuma "gagal mendeteksi sekali", bukan crash total.
+        try {
+            handleAccessibilityEvent(event)
+        } catch (e: Exception) {
+            Log.e(TAG, "Unhandled error di onAccessibilityEvent, event diabaikan", e)
+        }
+    }
+
+    private fun handleAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
 
         val pkg = event.packageName?.toString() ?: return
@@ -170,8 +186,6 @@ class TelegramBlockAccessibilityService : AccessibilityService() {
                         performGlobalAction(GLOBAL_ACTION_BACK)
                     }
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error saat memproses layar Chrome", e)
             } finally {
                 root.recycle()
             }
@@ -206,8 +220,6 @@ class TelegramBlockAccessibilityService : AccessibilityService() {
                     performGlobalAction(GLOBAL_ACTION_BACK)
                 }
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error saat memproses event aksesibilitas", e)
         } finally {
             root.recycle()
         }
