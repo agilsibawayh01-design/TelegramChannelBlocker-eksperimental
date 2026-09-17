@@ -1,8 +1,15 @@
 package com.mas.tgblocker
 
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.AccessibilityService.ScreenshotResult
+import android.accessibilityservice.AccessibilityService.TakeScreenshotCallback
+import android.graphics.Bitmap
+import android.hardware.HardwareBuffer
+import android.os.Build
 import android.util.Log
+import android.view.Display
 import android.view.accessibility.AccessibilityEvent
+import androidx.annotation.RequiresApi
 
 /**
  * Service yang membaca tampilan aplikasi Telegram (dan varian sejenisnya, lihat
@@ -35,8 +42,18 @@ import android.view.accessibility.AccessibilityEvent
  * dicek lewat [VulgarTextDetector] (keyword + confidence threshold). Kalau
  * confidence-nya cukup tinggi, BACK — dicatat ke log lokal (metadata saja,
  * lihat [DetectionLogEntry], TIDAK PERNAH menyimpan screenshot/isi teks).
- * Deteksi gambar NSFW BELUM aktif — lihat [NsfwImageClassifier] untuk
- * penjelasan lengkap kenapa & cara mengaktifkannya nanti.
+ *
+ * UPGRADE Image Content Detector (Fase 2b, additive, DEFAULT OFF): kalau
+ * toggle "Deteksi Gambar (AI)" diaktifkan pengguna dari MainActivity, dan
+ * perangkat Android 11+ (API 30+, syarat takeScreenshot()), service sesekali
+ * (di-throttle lewat [IMAGE_DETECTION_INTERVAL_MS], TIDAK setiap event/frame)
+ * mengambil screenshot layar lewat [takeScreenshot] bawaan AccessibilityService,
+ * lalu menyerahkan bitmap-nya ke [ImageContentDetector] (lihat
+ * ImageContentDetectorFactory) yang jalan 100% on-device. Kalau skornya
+ * melewati [BlockedChannelRepository.getImageDetectionThreshold], BACK.
+ * Detector ini TIDAK PERNAH aktif kalau modelnya belum dipasang pengguna
+ * sendiri di assets — lihat TfliteImageContentDetector.kt untuk detail
+ * lengkap & keterbatasannya (screenshot berkala, bukan video real-time).
  *
  * CATATAN PENTING soal cakupan: accessibility_service_config.xml TIDAK lagi
  * membatasi android:packageNames ke daftar tetap, supaya pengguna bisa
@@ -56,6 +73,11 @@ import android.view.accessibility.AccessibilityEvent
 class TelegramBlockAccessibilityService : AccessibilityService() {
 
     private lateinit var repository: BlockedChannelRepository
+    private var imageContentDetector: ImageContentDetector? = null
+
+    // Throttle screenshot+inference per package (BUKAN per event) — lihat
+    // requirement performa: jangan inference tiap frame/tiap event.
+    private val lastImageCheckAtMs = HashMap<String, Long>()
 
     companion object {
         private const val TAG = "TgChannelBlocker"
@@ -113,11 +135,23 @@ class TelegramBlockAccessibilityService : AccessibilityService() {
             "com.mmbox.xbrowser",
             "com.android.browser"
         )
+
+        // Jarak minimum antar screenshot+inference gambar, per package.
+        // Nilai ini konservatif (bukan real-time per-frame) sesuai
+        // requirement performa — video yang lewat cepat bisa saja tidak
+        // ke-sample, ini limitasi yang disengaja, bukan bug.
+        private const val IMAGE_DETECTION_INTERVAL_MS = 2000L
     }
 
     override fun onCreate() {
         super.onCreate()
         repository = BlockedChannelRepository(this)
+        imageContentDetector = ImageContentDetectorFactory.get(this)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        imageContentDetector?.close()
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -184,8 +218,11 @@ class TelegramBlockAccessibilityService : AccessibilityService() {
                         Log.d(TAG, "Konten vulgar terdeteksi di Chrome (confidence=${textResult.confidence}), menjalankan BACK")
                         repository.addDetectionLogEntry(pkg, "TEXT")
                         performGlobalAction(GLOBAL_ACTION_BACK)
+                        return
                     }
                 }
+
+                maybeCheckImageContent(pkg)
             } finally {
                 root.recycle()
             }
@@ -218,10 +255,90 @@ class TelegramBlockAccessibilityService : AccessibilityService() {
                     Log.d(TAG, "Konten vulgar terdeteksi di Telegram (confidence=${textResult.confidence}), menjalankan BACK")
                     repository.addDetectionLogEntry(pkg, "TEXT")
                     performGlobalAction(GLOBAL_ACTION_BACK)
+                    return
                 }
             }
+
+            maybeCheckImageContent(pkg)
         } finally {
             root.recycle()
+        }
+    }
+
+    /**
+     * Fase 2b - Deteksi Gambar (AI), DEFAULT OFF. Dipanggil dari 2 tempat
+     * (Chrome & Telegram resmi) setelah cek teks tidak menemukan apa-apa.
+     * Semua pengecekan (toggle, ketersediaan model, versi Android, throttle)
+     * ada DI SINI, jadi kalau salah satu gagal, fungsi ini langsung return
+     * tanpa efek samping apa pun ke fitur lain.
+     */
+    private fun maybeCheckImageContent(pkg: String) {
+        if (!repository.isImageDetectionEnabled()) return
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return // takeScreenshot() butuh Android 11+
+
+        val detector = imageContentDetector ?: return
+        if (!detector.isAvailable()) return // model belum dipasang pengguna
+
+        val now = System.currentTimeMillis()
+        val lastCheck = lastImageCheckAtMs[pkg] ?: 0L
+        if (now - lastCheck < IMAGE_DETECTION_INTERVAL_MS) return // throttle - bukan tiap event/frame
+        lastImageCheckAtMs[pkg] = now
+
+        captureScreenshotAndClassify(pkg, detector)
+    }
+
+    @RequiresApi(Build.VERSION_CODES.R)
+    private fun captureScreenshotAndClassify(pkg: String, detector: ImageContentDetector) {
+        try {
+            takeScreenshot(
+                Display.DEFAULT_DISPLAY,
+                mainExecutor,
+                object : TakeScreenshotCallback {
+                    override fun onSuccess(screenshot: ScreenshotResult) {
+                        try {
+                            val hardwareBuffer = screenshot.hardwareBuffer
+                            val bitmap = hardwareBufferToBitmap(hardwareBuffer)
+                            hardwareBuffer.close()
+                            if (bitmap == null) return
+
+                            detector.detect(bitmap) { score ->
+                                if (score == ImageContentDetector.SCORE_UNAVAILABLE) return@detect
+                                val threshold = repository.getImageDetectionThreshold()
+                                if (score >= threshold) {
+                                    Log.d(TAG, "Konten gambar berisiko terdeteksi di $pkg (score=$score, threshold=$threshold), menjalankan BACK")
+                                    repository.addDetectionLogEntry(pkg, "IMAGE")
+                                    performGlobalAction(GLOBAL_ACTION_BACK)
+                                }
+                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error memproses hasil screenshot", e)
+                        }
+                    }
+
+                    override fun onFailure(errorCode: Int) {
+                        // Gagal ambil screenshot (mis. layar sedang transisi) -
+                        // bukan error fatal, cuma dilewati, coba lagi di
+                        // kesempatan berikutnya (dibatasi throttle seperti biasa).
+                        Log.d(TAG, "takeScreenshot() gagal, errorCode=$errorCode")
+                    }
+                }
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Gagal memanggil takeScreenshot()", e)
+        }
+    }
+
+    /** Konversi hasil takeScreenshot() (HardwareBuffer) ke Bitmap software biasa. */
+    @RequiresApi(Build.VERSION_CODES.R)
+    private fun hardwareBufferToBitmap(hardwareBuffer: HardwareBuffer): Bitmap? {
+        return try {
+            val hwBitmap = Bitmap.wrapHardwareBuffer(hardwareBuffer, null) ?: return null
+            // Interpreter TFLite butuh bitmap software (ARGB_8888) biasa, bukan
+            // hardware bitmap, supaya bisa dibaca getPixels().
+            hwBitmap.copy(Bitmap.Config.ARGB_8888, false)
+        } catch (e: Exception) {
+            Log.e(TAG, "Gagal konversi screenshot ke Bitmap", e)
+            null
         }
     }
 

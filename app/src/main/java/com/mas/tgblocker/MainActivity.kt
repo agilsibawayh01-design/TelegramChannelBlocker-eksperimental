@@ -68,6 +68,7 @@ class MainActivity : AppCompatActivity() {
         setupPackageSection()
         setupDomainSection()
         setupContentDetectionSection()
+        setupImageDetectionSection()
         setupBackupSection()
 
         refreshList()
@@ -568,6 +569,40 @@ class MainActivity : AppCompatActivity() {
         binding.btnViewLog.setOnClickListener { showDetectionLogDialog() }
     }
 
+    private fun setupImageDetectionSection() {
+        binding.switchImageDetection.isChecked = repository.isImageDetectionEnabled()
+        updateImageDetectionStatusText()
+
+        binding.switchImageDetection.setOnCheckedChangeListener { _, isChecked ->
+            val current = repository.isImageDetectionEnabled()
+            if (isChecked == current) return@setOnCheckedChangeListener
+
+            if (!isChecked) {
+                binding.switchImageDetection.isChecked = true
+                guardIfStrict {
+                    repository.setImageDetectionEnabled(false)
+                    binding.switchImageDetection.isChecked = false
+                    updateImageDetectionStatusText()
+                }
+            } else {
+                repository.setImageDetectionEnabled(true)
+                updateImageDetectionStatusText()
+            }
+        }
+    }
+
+    private fun updateImageDetectionStatusText() {
+        val statusText = when {
+            android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R ->
+                getString(R.string.image_detection_status_unsupported)
+            ImageContentDetectorFactory.get(this).isAvailable() ->
+                getString(R.string.image_detection_status_available)
+            else ->
+                getString(R.string.image_detection_status_unavailable)
+        }
+        binding.tvImageDetectionStatus.text = statusText
+    }
+
     private fun showDetectionLogDialog() {
         val log = repository.getDetectionLog()
         val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_log, null)
@@ -657,6 +692,7 @@ class MainActivity : AppCompatActivity() {
             refreshPackages()
             refreshDomains()
             setupContentDetectionSection()
+            setupImageDetectionSection()
             Toast.makeText(this, R.string.toast_import_success, Toast.LENGTH_SHORT).show()
         } else {
             Toast.makeText(this, R.string.toast_import_failed, Toast.LENGTH_SHORT).show()

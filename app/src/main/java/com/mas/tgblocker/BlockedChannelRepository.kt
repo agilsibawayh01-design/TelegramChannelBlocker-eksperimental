@@ -251,6 +251,24 @@ class BlockedChannelRepository(context: Context) {
         prefs.edit().remove(KEY_DETECTION_LOG).apply()
     }
 
+    // ----- Deteksi Gambar / AI Image Detector (Fase 2b) -----
+    // TERPISAH dari toggle "Content Detection" teks (yang default ON) —
+    // ini WAJIB default OFF sesuai permintaan eksplisit, sampai pengguna
+    // sendiri yang mengaktifkan dari dalam aplikasi.
+
+    fun isImageDetectionEnabled(): Boolean = prefs.getBoolean(KEY_IMAGE_DETECTION_ENABLED, false)
+
+    fun setImageDetectionEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_IMAGE_DETECTION_ENABLED, enabled).apply()
+    }
+
+    fun getImageDetectionThreshold(): Float =
+        prefs.getFloat(KEY_IMAGE_DETECTION_THRESHOLD, DEFAULT_IMAGE_DETECTION_THRESHOLD)
+
+    fun setImageDetectionThreshold(threshold: Float) {
+        prefs.edit().putFloat(KEY_IMAGE_DETECTION_THRESHOLD, threshold.coerceIn(0f, 1f)).apply()
+    }
+
     // ----- Export / Import (backup teks lokal, tanpa server) -----
 
     fun exportData(): String {
@@ -276,6 +294,8 @@ class BlockedChannelRepository(context: Context) {
         obj.put("blockedDomains", domainArr)
 
         obj.put("contentDetectionEnabled", isContentDetectionEnabled())
+        obj.put("imageDetectionEnabled", isImageDetectionEnabled())
+        obj.put("imageDetectionThreshold", getImageDetectionThreshold())
 
         return obj.toString(2)
     }
@@ -325,12 +345,22 @@ class BlockedChannelRepository(context: Context) {
             } else {
                 true // backup lama (versi 1) belum punya field ini -> default aktif
             }
+            // imageDetectionEnabled: backup lama belum punya field ini -> default
+            // OFF (bukan ikut nilai contentDetectionEnabled), sesuai aturan "AI
+            // detector wajib default off sampai pengguna aktifkan sendiri".
+            val imageDetectionEnabled = obj.optBoolean("imageDetectionEnabled", false)
+            val imageDetectionThreshold = obj.optDouble(
+                "imageDetectionThreshold",
+                DEFAULT_IMAGE_DETECTION_THRESHOLD.toDouble()
+            ).toFloat()
 
             saveChannels(channels)
             setMode(mode)
             saveCustomPackages(packages)
             saveBlockedDomains(domains)
             setContentDetectionEnabled(contentDetectionEnabled)
+            setImageDetectionEnabled(imageDetectionEnabled)
+            setImageDetectionThreshold(imageDetectionThreshold)
             true
         } catch (e: Exception) {
             false
@@ -347,5 +377,8 @@ class BlockedChannelRepository(context: Context) {
         private const val KEY_CONTENT_DETECTION_ENABLED = "content_detection_enabled"
         private const val KEY_DETECTION_LOG = "detection_log"
         private const val MAX_LOG_ENTRIES = 50
+        private const val KEY_IMAGE_DETECTION_ENABLED = "image_detection_enabled"
+        private const val KEY_IMAGE_DETECTION_THRESHOLD = "image_detection_threshold"
+        const val DEFAULT_IMAGE_DETECTION_THRESHOLD = 0.70f
     }
 }
