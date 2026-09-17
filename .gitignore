@@ -1,0 +1,19 @@
+# Signing key - JANGAN PERNAH commit file keystore ke repo.
+# Keystore untuk CI disimpan sebagai GitHub Secret (TGBLOCKER_KEYSTORE_BASE64),
+# bukan file di repo. Baris ini cuma jaring pengaman kalau file keystore
+# nggak sengaja ditaruh di folder project lokal.
+*.jks
+*.keystore
+keystore/
+keystore-gen/
+
+# Build output
+/app/build/
+/build/
+.gradle/
+local.properties
+
+# Wrapper yang di-generate otomatis oleh workflow CI (gradle wrapper --gradle-version 8.7)
+gradle/wrapper/
+gradlew
+gradlew.bat
