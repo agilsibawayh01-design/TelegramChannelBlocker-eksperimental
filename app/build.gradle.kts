@@ -77,6 +77,13 @@ android {
     buildFeatures {
         viewBinding = true
     }
+
+    // Supaya file model .tflite (kalau nanti dipasang di assets/) tidak
+    // ikut dikompresi ke dalam APK — TFLite Interpreter butuh mmap file
+    // model apa adanya, gagal buka kalau kompres.
+    androidResources {
+        noCompress += "tflite"
+    }
 }
 
 dependencies {
@@ -85,4 +92,10 @@ dependencies {
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.recyclerview:recyclerview:1.3.2")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
+
+    // Content Detection (Fase 2b) - runtime untuk ImageContentDetector.
+    // Library resmi Google, Apache 2.0. TIDAK membundel model apa pun -
+    // cuma "mesin" untuk menjalankan file .tflite yang pengguna pasang
+    // sendiri di assets/. Lihat TfliteImageContentDetector.kt.
+    implementation("org.tensorflow:tensorflow-lite:2.14.0")
 }
