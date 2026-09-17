@@ -6,6 +6,8 @@ import android.accessibilityservice.AccessibilityService.TakeScreenshotCallback
 import android.graphics.Bitmap
 import android.hardware.HardwareBuffer
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.view.Display
 import android.view.accessibility.AccessibilityEvent
@@ -43,17 +45,19 @@ import androidx.annotation.RequiresApi
  * confidence-nya cukup tinggi, BACK — dicatat ke log lokal (metadata saja,
  * lihat [DetectionLogEntry], TIDAK PERNAH menyimpan screenshot/isi teks).
  *
- * UPGRADE Image Content Detector (Fase 2b, additive, DEFAULT OFF): kalau
+ * UPGRADE Image Content Detector (Fase 2b/2c, additive, DEFAULT OFF): kalau
  * toggle "Deteksi Gambar (AI)" diaktifkan pengguna dari MainActivity, dan
- * perangkat Android 11+ (API 30+, syarat takeScreenshot()), service sesekali
- * (di-throttle lewat [IMAGE_DETECTION_INTERVAL_MS], TIDAK setiap event/frame)
- * mengambil screenshot layar lewat [takeScreenshot] bawaan AccessibilityService,
- * lalu menyerahkan bitmap-nya ke [ImageContentDetector] (lihat
- * ImageContentDetectorFactory) yang jalan 100% on-device. Kalau skornya
- * melewati [BlockedChannelRepository.getImageDetectionThreshold], BACK.
- * Detector ini TIDAK PERNAH aktif kalau modelnya belum dipasang pengguna
- * sendiri di assets — lihat TfliteImageContentDetector.kt untuk detail
- * lengkap & keterbatasannya (screenshot berkala, bukan video real-time).
+ * perangkat Android 11+ (API 30+, syarat takeScreenshot()), service
+ * menjalankan LOOP SAMPLING BERKALA (Handler, interval
+ * [IMAGE_DETECTION_INTERVAL_MS]) yang independen dari accessibility event —
+ * bukan lagi dipicu oleh event, karena video yang berganti frame TIDAK SELALU
+ * menghasilkan accessibility event yang relevan. Loop ini cuma benar-benar
+ * mengambil screenshot kalau app di foreground saat ini ([currentForegroundPackage])
+ * adalah Chrome/Telegram DAN toggle aktif DAN model tersedia DAN tidak sedang
+ * cooldown. Screenshot → [ImageContentDetector] (100% on-device) → skor →
+ * BACK kalau melewati threshold, lalu cooldown supaya tidak BACK berulang.
+ * Detector TIDAK PERNAH aktif kalau modelnya belum dipasang pengguna sendiri
+ * di assets — lihat TfliteImageContentDetector.kt untuk detail & keterbatasan.
  *
  * CATATAN PENTING soal cakupan: accessibility_service_config.xml TIDAK lagi
  * membatasi android:packageNames ke daftar tetap, supaya pengguna bisa
@@ -75,9 +79,33 @@ class TelegramBlockAccessibilityService : AccessibilityService() {
     private lateinit var repository: BlockedChannelRepository
     private var imageContentDetector: ImageContentDetector? = null
 
-    // Throttle screenshot+inference per package (BUKAN per event) — lihat
-    // requirement performa: jangan inference tiap frame/tiap event.
-    private val lastImageCheckAtMs = HashMap<String, Long>()
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    // Package yang lagi di foreground, diupdate dari SETIAP accessibility
+    // event yang masuk (lihat handleAccessibilityEvent). Dipakai loop
+    // sampling di bawah supaya screenshot cuma diambil kalau Chrome/Telegram
+    // memang lagi aktif — tapi PENGAMBILANNYA sendiri jalan lewat timer,
+    // BUKAN menunggu event baru (video bisa ganti frame tanpa event).
+    @Volatile private var currentForegroundPackage: String? = null
+
+    // Guard supaya tidak ada 2 screenshot/inference yang jalan bertumpuk.
+    @Volatile private var imageCheckInFlight = false
+
+    // Kapan boleh screenshot lagi (dipakai baik untuk throttle normal
+    // maupun cooldown ekstra setelah BACK supaya tidak BACK berulang-ulang).
+    @Volatile private var nextImageCheckAllowedAtMs = 0L
+
+    private val imageSamplingLoop = object : Runnable {
+        override fun run() {
+            try {
+                runImageSamplingTick()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error di image sampling loop", e)
+            } finally {
+                mainHandler.postDelayed(this, IMAGE_DETECTION_INTERVAL_MS)
+            }
+        }
+    }
 
     companion object {
         private const val TAG = "TgChannelBlocker"
@@ -136,11 +164,20 @@ class TelegramBlockAccessibilityService : AccessibilityService() {
             "com.android.browser"
         )
 
-        // Jarak minimum antar screenshot+inference gambar, per package.
-        // Nilai ini konservatif (bukan real-time per-frame) sesuai
-        // requirement performa — video yang lewat cepat bisa saja tidak
-        // ke-sample, ini limitasi yang disengaja, bukan bug.
-        private const val IMAGE_DETECTION_INTERVAL_MS = 2000L
+        // Interval loop sampling screenshot (BUKAN per-frame/per-event) —
+        // sesuai requirement performa, target realistis ~1 detik.
+        private const val IMAGE_DETECTION_INTERVAL_MS = 1000L
+
+        // Cooldown TAMBAHAN setelah BACK dipicu oleh deteksi gambar, supaya
+        // tidak BACK berulang-ulang selama konten yang sama masih di layar.
+        private const val IMAGE_BACK_COOLDOWN_MS = 3000L
+    }
+
+    override fun onServiceConnected() {
+        super.onServiceConnected()
+        mainHandler.removeCallbacks(imageSamplingLoop)
+        mainHandler.postDelayed(imageSamplingLoop, IMAGE_DETECTION_INTERVAL_MS)
+        Log.d(TAG, "Image sampling loop dimulai (service connected)")
     }
 
     override fun onCreate() {
@@ -151,6 +188,7 @@ class TelegramBlockAccessibilityService : AccessibilityService() {
 
     override fun onDestroy() {
         super.onDestroy()
+        mainHandler.removeCallbacks(imageSamplingLoop)
         imageContentDetector?.close()
     }
 
@@ -174,6 +212,13 @@ class TelegramBlockAccessibilityService : AccessibilityService() {
         if (event == null) return
 
         val pkg = event.packageName?.toString() ?: return
+
+        // Dipakai loop sampling gambar (lihat runImageSamplingTick) supaya
+        // screenshot cuma diambil kalau app ini memang sedang di foreground.
+        // Diupdate untuk SEMUA package (bukan cuma yang relevan ke fitur
+        // blokir lain), supaya kalau user pindah ke app lain, loop tahu dan
+        // otomatis berhenti sampling.
+        currentForegroundPackage = pkg
 
         // Lapisan keamanan utama: apa pun isi accessibility_service_config.xml,
         // package selain OFFICIAL_PACKAGE, CHROME_PACKAGE, CLONE_PACKAGES,
@@ -221,8 +266,6 @@ class TelegramBlockAccessibilityService : AccessibilityService() {
                         return
                     }
                 }
-
-                maybeCheckImageContent(pkg)
             } finally {
                 root.recycle()
             }
@@ -258,32 +301,44 @@ class TelegramBlockAccessibilityService : AccessibilityService() {
                     return
                 }
             }
-
-            maybeCheckImageContent(pkg)
         } finally {
             root.recycle()
         }
     }
 
     /**
-     * Fase 2b - Deteksi Gambar (AI), DEFAULT OFF. Dipanggil dari 2 tempat
-     * (Chrome & Telegram resmi) setelah cek teks tidak menemukan apa-apa.
-     * Semua pengecekan (toggle, ketersediaan model, versi Android, throttle)
-     * ada DI SINI, jadi kalau salah satu gagal, fungsi ini langsung return
-     * tanpa efek samping apa pun ke fitur lain.
+     * Dipanggil oleh [imageSamplingLoop] tiap [IMAGE_DETECTION_INTERVAL_MS],
+     * BUKAN oleh accessibility event — supaya video yang berganti frame
+     * tanpa accessibility event baru tetap ke-sample secara berkala.
+     * Semua syarat (toggle, versi Android, model, foreground package,
+     * cooldown, tidak ada inference lain yang jalan) dicek di sini; kalau
+     * satu saja gagal, fungsi langsung return tanpa efek samping.
      */
-    private fun maybeCheckImageContent(pkg: String) {
+    private fun runImageSamplingTick() {
         if (!repository.isImageDetectionEnabled()) return
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return // takeScreenshot() butuh Android 11+
 
         val detector = imageContentDetector ?: return
         if (!detector.isAvailable()) return // model belum dipasang pengguna
 
-        val now = System.currentTimeMillis()
-        val lastCheck = lastImageCheckAtMs[pkg] ?: 0L
-        if (now - lastCheck < IMAGE_DETECTION_INTERVAL_MS) return // throttle - bukan tiap event/frame
-        lastImageCheckAtMs[pkg] = now
+        val pkg = currentForegroundPackage ?: return
+        val isTarget = pkg == CHROME_PACKAGE || pkg == OFFICIAL_PACKAGE
+        if (!isTarget) return
 
+        if (repository.getMode() == BlockingMode.OFF) return
+
+        val now = System.currentTimeMillis()
+        if (now < nextImageCheckAllowedAtMs) return // masih cooldown (normal atau habis BACK)
+
+        if (imageCheckInFlight) {
+            // Ada screenshot/inference sebelumnya yang belum selesai -
+            // JANGAN numpuk, tunggu tick berikutnya saja.
+            return
+        }
+        imageCheckInFlight = true
+        nextImageCheckAllowedAtMs = now + IMAGE_DETECTION_INTERVAL_MS
+
+        Log.d(TAG, "SCREENSHOT_REQUESTED pkg=$pkg")
         captureScreenshotAndClassify(pkg, detector)
     }
 
@@ -296,35 +351,54 @@ class TelegramBlockAccessibilityService : AccessibilityService() {
                 object : TakeScreenshotCallback {
                     override fun onSuccess(screenshot: ScreenshotResult) {
                         try {
+                            Log.d(TAG, "SCREENSHOT_SUCCESS pkg=$pkg")
                             val hardwareBuffer = screenshot.hardwareBuffer
                             val bitmap = hardwareBufferToBitmap(hardwareBuffer)
                             hardwareBuffer.close()
-                            if (bitmap == null) return
+                            if (bitmap == null) {
+                                Log.d(TAG, "SCREENSHOT_FAILED pkg=$pkg reason=bitmap_null_after_conversion")
+                                imageCheckInFlight = false
+                                return
+                            }
 
+                            Log.d(TAG, "INFERENCE_STARTED pkg=$pkg")
                             detector.detect(bitmap) { score ->
-                                if (score == ImageContentDetector.SCORE_UNAVAILABLE) return@detect
+                                imageCheckInFlight = false
+
+                                if (score == ImageContentDetector.SCORE_UNAVAILABLE) {
+                                    Log.d(TAG, "INFERENCE_RESULT pkg=$pkg score=UNAVAILABLE")
+                                    return@detect
+                                }
+
+                                Log.d(TAG, "INFERENCE_RESULT pkg=$pkg score=$score")
                                 val threshold = repository.getImageDetectionThreshold()
                                 if (score >= threshold) {
-                                    Log.d(TAG, "Konten gambar berisiko terdeteksi di $pkg (score=$score, threshold=$threshold), menjalankan BACK")
+                                    Log.d(TAG, "BLOCK_TRIGGERED pkg=$pkg score=$score threshold=$threshold")
                                     repository.addDetectionLogEntry(pkg, "IMAGE")
                                     performGlobalAction(GLOBAL_ACTION_BACK)
+                                    Log.d(TAG, "BACK_EXECUTED pkg=$pkg")
+                                    // Cooldown ekstra supaya tidak BACK berulang-ulang
+                                    // selama konten yang sama masih di layar.
+                                    nextImageCheckAllowedAtMs = System.currentTimeMillis() + IMAGE_BACK_COOLDOWN_MS
                                 }
                             }
                         } catch (e: Exception) {
                             Log.e(TAG, "Error memproses hasil screenshot", e)
+                            imageCheckInFlight = false
                         }
                     }
 
                     override fun onFailure(errorCode: Int) {
-                        // Gagal ambil screenshot (mis. layar sedang transisi) -
-                        // bukan error fatal, cuma dilewati, coba lagi di
-                        // kesempatan berikutnya (dibatasi throttle seperti biasa).
-                        Log.d(TAG, "takeScreenshot() gagal, errorCode=$errorCode")
+                        // PENTING: screenshot gagal TIDAK dianggap "aman" - cuma
+                        // dilewati & dicatat, coba lagi di tick berikutnya.
+                        Log.d(TAG, "SCREENSHOT_FAILED pkg=$pkg errorCode=$errorCode")
+                        imageCheckInFlight = false
                     }
                 }
             )
         } catch (e: Exception) {
             Log.e(TAG, "Gagal memanggil takeScreenshot()", e)
+            imageCheckInFlight = false
         }
     }
 
