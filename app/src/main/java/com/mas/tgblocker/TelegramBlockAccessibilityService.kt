@@ -29,6 +29,15 @@ import android.view.accessibility.AccessibilityEvent
  *   bisa diblokir lewat "Aplikasi/Klon Tambahan" (custom packages), sama
  *   seperti aplikasi lain.
  *
+ * UPGRADE Content Detection (Fase 2, additive, tidak mengubah logic di
+ * atas): kalau toggle "Content Detection" aktif (default: aktif), teks yang
+ * SUDAH terbaca lewat Accessibility API di Chrome & Telegram resmi juga
+ * dicek lewat [VulgarTextDetector] (keyword + confidence threshold). Kalau
+ * confidence-nya cukup tinggi, BACK — dicatat ke log lokal (metadata saja,
+ * lihat [DetectionLogEntry], TIDAK PERNAH menyimpan screenshot/isi teks).
+ * Deteksi gambar NSFW BELUM aktif — lihat [NsfwImageClassifier] untuk
+ * penjelasan lengkap kenapa & cara mengaktifkannya nanti.
+ *
  * CATATAN PENTING soal cakupan: accessibility_service_config.xml TIDAK lagi
  * membatasi android:packageNames ke daftar tetap, supaya pengguna bisa
  * menambah aplikasi kustom secara dinamis tanpa perlu build ulang APK.
@@ -136,18 +145,30 @@ class TelegramBlockAccessibilityService : AccessibilityService() {
             return
         }
 
-        // Chrome: cek address bar terhadap domain blokir (custom + bawaan).
+        // Chrome: cek address bar terhadap domain blokir (custom + bawaan),
+        // DITAMBAH cek Content Detection (teks vulgar di halaman) kalau aktif.
         if (isChrome) {
             val root = rootInActiveWindow ?: return
             try {
                 val blockedDomains = repository.getBlockedDomains() + AdultDomainList.DOMAINS
                 val urlBarText = WebsiteDetector.findUrlBarText(root)
-                val candidateText = urlBarText ?: WebsiteDetector.collectAllTexts(root).joinToString(" ")
+                val allTexts = WebsiteDetector.collectAllTexts(root)
+                val candidateText = urlBarText ?: allTexts.joinToString(" ")
 
                 val matchedDomain = WebsiteDetector.findBlockedDomain(candidateText, blockedDomains)
                 if (matchedDomain != null) {
                     Log.d(TAG, "Domain diblokir terdeteksi ($matchedDomain), menjalankan BACK")
                     performGlobalAction(GLOBAL_ACTION_BACK)
+                    return
+                }
+
+                if (repository.isContentDetectionEnabled()) {
+                    val textResult = VulgarTextDetector.analyze(allTexts)
+                    if (textResult.isBlocked) {
+                        Log.d(TAG, "Konten vulgar terdeteksi di Chrome (confidence=${textResult.confidence}), menjalankan BACK")
+                        repository.addDetectionLogEntry(pkg, "TEXT")
+                        performGlobalAction(GLOBAL_ACTION_BACK)
+                    }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error saat memproses layar Chrome", e)
@@ -174,6 +195,16 @@ class TelegramBlockAccessibilityService : AccessibilityService() {
             if (matchedUsername != null || matchedName != null || matchedArgo) {
                 Log.d(TAG, "Channel diblokir terdeteksi, menjalankan BACK")
                 performGlobalAction(GLOBAL_ACTION_BACK)
+                return
+            }
+
+            if (repository.isContentDetectionEnabled()) {
+                val textResult = VulgarTextDetector.analyze(screenTexts.raw)
+                if (textResult.isBlocked) {
+                    Log.d(TAG, "Konten vulgar terdeteksi di Telegram (confidence=${textResult.confidence}), menjalankan BACK")
+                    repository.addDetectionLogEntry(pkg, "TEXT")
+                    performGlobalAction(GLOBAL_ACTION_BACK)
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error saat memproses event aksesibilitas", e)

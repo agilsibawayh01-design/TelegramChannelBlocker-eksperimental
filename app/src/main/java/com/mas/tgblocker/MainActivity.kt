@@ -67,6 +67,7 @@ class MainActivity : AppCompatActivity() {
 
         setupPackageSection()
         setupDomainSection()
+        setupContentDetectionSection()
         setupBackupSection()
 
         refreshList()
@@ -541,6 +542,56 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
+    // ----- Fitur: Content Detection (Fase 2) -----
+    // Toggle-nya sendiri digate lewat guardIfStrict cuma saat MEMATIKAN
+    // (supaya nggak bisa dipakai buat curang di Mode Ketat); mengaktifkan
+    // bebas tanpa gate, sama pola-nya dengan Mode Mati->Normal->Ketat.
+
+    private fun setupContentDetectionSection() {
+        binding.switchContentDetection.isChecked = repository.isContentDetectionEnabled()
+        binding.switchContentDetection.setOnCheckedChangeListener { _, isChecked ->
+            val current = repository.isContentDetectionEnabled()
+            if (isChecked == current) return@setOnCheckedChangeListener
+
+            if (!isChecked) {
+                // Tahan tampilan (nyalakan lagi) sampai gate selesai/dibatalkan.
+                binding.switchContentDetection.isChecked = true
+                guardIfStrict {
+                    repository.setContentDetectionEnabled(false)
+                    binding.switchContentDetection.isChecked = false
+                }
+            } else {
+                repository.setContentDetectionEnabled(true)
+            }
+        }
+
+        binding.btnViewLog.setOnClickListener { showDetectionLogDialog() }
+    }
+
+    private fun showDetectionLogDialog() {
+        val log = repository.getDetectionLog()
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_log, null)
+        val tvLogContent = dialogView.findViewById<TextView>(R.id.tvLogContent)
+
+        val sdf = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault())
+        tvLogContent.text = if (log.isEmpty()) {
+            getString(R.string.dialog_log_empty)
+        } else {
+            log.joinToString("\n") { entry ->
+                "${sdf.format(java.util.Date(entry.timestamp))}  ${entry.pkg}  ${entry.detectionType}"
+            }
+        }
+
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.dialog_log_title)
+            .setView(dialogView)
+            .setPositiveButton(R.string.btn_close, null)
+            .setNegativeButton(R.string.btn_clear_log) { _, _ ->
+                repository.clearDetectionLog()
+            }
+            .show()
+    }
+
     // ----- Fitur: Export / Import -----
     // Backup teks lokal (JSON), tanpa server. Import MENGGANTI seluruh
     // channel, mode, dan aplikasi tambahan yang ada saat ini, jadi digate
@@ -605,6 +656,7 @@ class MainActivity : AppCompatActivity() {
             refreshList()
             refreshPackages()
             refreshDomains()
+            setupContentDetectionSection()
             Toast.makeText(this, R.string.toast_import_success, Toast.LENGTH_SHORT).show()
         } else {
             Toast.makeText(this, R.string.toast_import_failed, Toast.LENGTH_SHORT).show()

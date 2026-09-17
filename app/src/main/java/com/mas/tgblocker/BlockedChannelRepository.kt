@@ -208,6 +208,49 @@ class BlockedChannelRepository(context: Context) {
         saveBlockedDomains(current)
     }
 
+    // ----- Content Detection (Fase 2) -----
+    // Toggle on/off + log LOKAL (metadata saja: timestamp, package, jenis
+    // deteksi, aksi). TIDAK PERNAH menyimpan screenshot atau isi teks lengkap
+    // yang terdeteksi, sesuai permintaan eksplisit.
+
+    fun isContentDetectionEnabled(): Boolean = prefs.getBoolean(KEY_CONTENT_DETECTION_ENABLED, true)
+
+    fun setContentDetectionEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_CONTENT_DETECTION_ENABLED, enabled).apply()
+    }
+
+    fun addDetectionLogEntry(pkg: String, detectionType: String) {
+        val current = getDetectionLog().toMutableList()
+        current.add(0, DetectionLogEntry(System.currentTimeMillis(), pkg, detectionType))
+        val trimmed = current.take(MAX_LOG_ENTRIES)
+        val arr = JSONArray()
+        trimmed.forEach { entry ->
+            val o = JSONObject()
+            o.put("ts", entry.timestamp)
+            o.put("pkg", entry.pkg)
+            o.put("type", entry.detectionType)
+            arr.put(o)
+        }
+        prefs.edit().putString(KEY_DETECTION_LOG, arr.toString()).apply()
+    }
+
+    fun getDetectionLog(): List<DetectionLogEntry> {
+        val raw = prefs.getString(KEY_DETECTION_LOG, null) ?: return emptyList()
+        return try {
+            val arr = JSONArray(raw)
+            (0 until arr.length()).mapNotNull { i ->
+                val o = arr.optJSONObject(i) ?: return@mapNotNull null
+                DetectionLogEntry(o.optLong("ts"), o.optString("pkg"), o.optString("type"))
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    fun clearDetectionLog() {
+        prefs.edit().remove(KEY_DETECTION_LOG).apply()
+    }
+
     // ----- Export / Import (backup teks lokal, tanpa server) -----
 
     fun exportData(): String {
@@ -231,6 +274,8 @@ class BlockedChannelRepository(context: Context) {
         val domainArr = JSONArray()
         getBlockedDomains().forEach { domainArr.put(it) }
         obj.put("blockedDomains", domainArr)
+
+        obj.put("contentDetectionEnabled", isContentDetectionEnabled())
 
         return obj.toString(2)
     }
@@ -275,10 +320,17 @@ class BlockedChannelRepository(context: Context) {
                 domainArr.optString(i).takeIf { it.isNotBlank() }
             }
 
+            val contentDetectionEnabled = if (obj.has("contentDetectionEnabled")) {
+                obj.optBoolean("contentDetectionEnabled", true)
+            } else {
+                true // backup lama (versi 1) belum punya field ini -> default aktif
+            }
+
             saveChannels(channels)
             setMode(mode)
             saveCustomPackages(packages)
             saveBlockedDomains(domains)
+            setContentDetectionEnabled(contentDetectionEnabled)
             true
         } catch (e: Exception) {
             false
@@ -292,5 +344,8 @@ class BlockedChannelRepository(context: Context) {
         private const val KEY_CHANNELS = "blocked_channels"
         private const val KEY_CUSTOM_PACKAGES = "custom_packages"
         private const val KEY_BLOCKED_DOMAINS = "blocked_domains"
+        private const val KEY_CONTENT_DETECTION_ENABLED = "content_detection_enabled"
+        private const val KEY_DETECTION_LOG = "detection_log"
+        private const val MAX_LOG_ENTRIES = 50
     }
 }
