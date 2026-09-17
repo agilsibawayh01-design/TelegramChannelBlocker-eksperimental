@@ -88,4 +88,13 @@
     <string name="dialog_add_domain_hint">Masukkan domain yang mau diblokir (contoh: example.com). Subdomain-nya ikut terblokir otomatis.</string>
     <string name="hint_domain_name">Domain, contoh: example.com</string>
     <string name="toast_invalid_domain">Domain tidak valid atau sudah ada di daftar</string>
+
+    <!-- Fitur: Content Detection (Fase 2) -->
+    <string name="label_content_detection">Konten (Content Detection)</string>
+    <string name="content_detection_hint">Mendeteksi teks vulgar/NSFW di halaman Chrome dan pesan Telegram (berbasis kata kunci + threshold, murni lokal di perangkat). Deteksi GAMBAR (tanpa teks) belum aktif — butuh model AI terlatih yang belum terpasang.</string>
+    <string name="switch_content_detection">Aktifkan Content Detection</string>
+    <string name="btn_view_log">Lihat Log Deteksi</string>
+    <string name="dialog_log_title">Log Deteksi Konten</string>
+    <string name="dialog_log_empty">Belum ada deteksi tercatat.</string>
+    <string name="btn_clear_log">Hapus Log</string>
 </resources>
