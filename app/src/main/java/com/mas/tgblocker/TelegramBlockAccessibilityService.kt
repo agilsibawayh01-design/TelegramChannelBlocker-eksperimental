@@ -91,6 +91,12 @@ class TelegramBlockAccessibilityService : AccessibilityService() {
     // Guard supaya tidak ada 2 screenshot/inference yang jalan bertumpuk.
     @Volatile private var imageCheckInFlight = false
 
+    // Kapan check terakhir mulai - dipakai watchdog di bawah untuk deteksi
+    // kalau imageCheckInFlight "macet" true selamanya (mis. callback dari
+    // detector/takeScreenshot ternyata tidak pernah terpanggil karena bug
+    // lain), supaya pipeline bisa pulih sendiri alih-alih diam permanen.
+    @Volatile private var imageCheckStartedAtMs = 0L
+
     // Kapan boleh screenshot lagi (dipakai baik untuk throttle normal
     // maupun cooldown ekstra setelah BACK supaya tidak BACK berulang-ulang).
     @Volatile private var nextImageCheckAllowedAtMs = 0L
@@ -171,6 +177,12 @@ class TelegramBlockAccessibilityService : AccessibilityService() {
         // Cooldown TAMBAHAN setelah BACK dipicu oleh deteksi gambar, supaya
         // tidak BACK berulang-ulang selama konten yang sama masih di layar.
         private const val IMAGE_BACK_COOLDOWN_MS = 3000L
+
+        // Kalau imageCheckInFlight macet true lebih lama dari ini, dianggap
+        // callback-nya hilang (bug lain) - direset paksa supaya pipeline
+        // tidak diam permanen. Longgar (10 detik) karena inference on-device
+        // biasanya cuma perlu ratusan ms, jadi ini murni jaring pengaman.
+        private const val IMAGE_INFLIGHT_TIMEOUT_MS = 10000L
     }
 
     override fun onServiceConnected() {
@@ -331,14 +343,25 @@ class TelegramBlockAccessibilityService : AccessibilityService() {
         if (now < nextImageCheckAllowedAtMs) return // masih cooldown (normal atau habis BACK)
 
         if (imageCheckInFlight) {
-            // Ada screenshot/inference sebelumnya yang belum selesai -
-            // JANGAN numpuk, tunggu tick berikutnya saja.
-            return
+            val stuckMs = now - imageCheckStartedAtMs
+            if (stuckMs < IMAGE_INFLIGHT_TIMEOUT_MS) {
+                // Ada screenshot/inference sebelumnya yang belum selesai -
+                // JANGAN numpuk, tunggu tick berikutnya saja.
+                return
+            }
+            // Sudah macet kelamaan (callback sebelumnya diduga tidak pernah
+            // terpanggil) - reset paksa supaya pipeline pulih, dan catat di
+            // log biar keliatan di UI kalau ini yang jadi masalah.
+            Log.w(TAG, "DBG_INFLIGHT_TIMEOUT pkg=$pkg stuckMs=$stuckMs - reset paksa")
+            repository.addDetectionLogEntry(pkg, "DBG_INFLIGHT_TIMEOUT")
+            imageCheckInFlight = false
         }
         imageCheckInFlight = true
+        imageCheckStartedAtMs = now
         nextImageCheckAllowedAtMs = now + IMAGE_DETECTION_INTERVAL_MS
 
         Log.d(TAG, "SCREENSHOT_REQUESTED pkg=$pkg")
+        repository.addDetectionLogEntry(pkg, "DBG_SCREENSHOT_REQUESTED")
         captureScreenshotAndClassify(pkg, detector)
     }
 
@@ -352,25 +375,30 @@ class TelegramBlockAccessibilityService : AccessibilityService() {
                     override fun onSuccess(screenshot: ScreenshotResult) {
                         try {
                             Log.d(TAG, "SCREENSHOT_SUCCESS pkg=$pkg")
+                            repository.addDetectionLogEntry(pkg, "DBG_SCREENSHOT_SUCCESS")
                             val hardwareBuffer = screenshot.hardwareBuffer
                             val bitmap = hardwareBufferToBitmap(hardwareBuffer)
                             hardwareBuffer.close()
                             if (bitmap == null) {
                                 Log.d(TAG, "SCREENSHOT_FAILED pkg=$pkg reason=bitmap_null_after_conversion")
+                                repository.addDetectionLogEntry(pkg, "DBG_BITMAP_NULL")
                                 imageCheckInFlight = false
                                 return
                             }
 
                             Log.d(TAG, "INFERENCE_STARTED pkg=$pkg")
+                            repository.addDetectionLogEntry(pkg, "DBG_INFERENCE_STARTED")
                             detector.detect(bitmap) { score ->
                                 imageCheckInFlight = false
 
                                 if (score == ImageContentDetector.SCORE_UNAVAILABLE) {
                                     Log.d(TAG, "INFERENCE_RESULT pkg=$pkg score=UNAVAILABLE")
+                                    repository.addDetectionLogEntry(pkg, "DBG_SCORE_UNAVAILABLE")
                                     return@detect
                                 }
 
                                 Log.d(TAG, "INFERENCE_RESULT pkg=$pkg score=$score")
+                                repository.addDetectionLogEntry(pkg, "DBG_SCORE_$score")
                                 val threshold = repository.getImageDetectionThreshold()
                                 if (score >= threshold) {
                                     Log.d(TAG, "BLOCK_TRIGGERED pkg=$pkg score=$score threshold=$threshold")
@@ -384,6 +412,7 @@ class TelegramBlockAccessibilityService : AccessibilityService() {
                             }
                         } catch (e: Exception) {
                             Log.e(TAG, "Error memproses hasil screenshot", e)
+                            repository.addDetectionLogEntry(pkg, "DBG_EXCEPTION_${e.javaClass.simpleName}")
                             imageCheckInFlight = false
                         }
                     }
@@ -392,6 +421,7 @@ class TelegramBlockAccessibilityService : AccessibilityService() {
                         // PENTING: screenshot gagal TIDAK dianggap "aman" - cuma
                         // dilewati & dicatat, coba lagi di tick berikutnya.
                         Log.d(TAG, "SCREENSHOT_FAILED pkg=$pkg errorCode=$errorCode")
+                        repository.addDetectionLogEntry(pkg, "DBG_SCREENSHOT_FAILED_$errorCode")
                         imageCheckInFlight = false
                     }
                 }
