@@ -11,11 +11,11 @@ package com.mas.tgblocker
  *   (kata berbeda, bukan kata yang sama diulang) untuk block.
  *
  * PENTING — batasan yang jujur (sama seperti AdultDomainList):
- * - Ini SEED LIST kecil, BUKAN kamus lengkap. Banyak variasi slang/typo
- *   yang sengaja dibuat untuk menghindari filter kata tidak akan tertangkap.
+ * - Ini daftar yang sudah diperluas, TAPI TETAP BUKAN kamus lengkap. Banyak
+ *   variasi slang/typo yang sengaja dibuat untuk menghindari filter kata
+ *   tidak akan tertangkap, dan bahasa terus berubah.
  * - Matching berbasis word-boundary pada teks yang SUDAH tampil di layar
- *   lewat Accessibility API — tidak ada OCR gambar di sini (lihat
- *   NsfwImageClassifier untuk itu, yang statusnya belum aktif).
+ *   lewat Accessibility API — tidak ada OCR teks-dalam-gambar di sini.
  * - Pengguna tidak bisa menambah/mengubah daftar kata ini dari UI (beda
  *   dengan domain/package) supaya daftar kata vulgar tidak perlu
  *   ditampilkan mentah-mentah di layar aplikasi.
@@ -29,13 +29,23 @@ object VulgarTextDetector {
     )
 
     private val strongTerms = setOf(
-        "porn", "porno", "pornografi", "pornhub", "xvideos", "xnxx", "xxx",
-        "bokep", "ngentot", "memek", "kontol"
+        // Indonesia
+        "porno", "pornografi", "bokep", "ngentot", "memek", "kontol",
+        "ngewe", "colmek", "pepek", "pelacur",
+        // Inggris / umum
+        "porn", "pornhub", "xvideos", "xnxx", "xxx", "hentai",
+        "cumshot", "blowjob", "handjob", "gangbang", "creampie", "anal",
+        "dildo", "prostitute", "whore", "hooker"
     )
 
     private val moderateTerms = setOf(
-        "sex", "seks", "nude", "nudes", "telanjang", "bugil", "vulgar",
-        "cabul", "mesum", "striptease", "escort"
+        // Indonesia
+        "seks", "telanjang", "bugil", "vulgar", "cabul", "mesum",
+        "toket",
+        // Inggris / umum
+        "sex", "nude", "nudes", "striptease", "escort", "milf", "boobs",
+        "tits", "cum", "orgasm", "masturbate", "fetish", "slut", "nipple",
+        "orgy", "incest", "rape"
     )
 
     private val wordPattern = Regex("[a-z0-9]+")

@@ -5,8 +5,8 @@ package com.mas.tgblocker
  * ditambahkan manual oleh pengguna.
  *
  * PENTING — batasan yang jujur:
- * - Ini SEED LIST kecil berisi beberapa domain dewasa paling umum dikenal,
- *   BUKAN daftar lengkap/komprehensif. Internet punya puluhan ribu domain
+ * - Ini daftar yang sudah diperluas (~50 domain), TAPI TETAP BUKAN
+ *   daftar lengkap/komprehensif. Internet punya puluhan ribu domain
  *   dewasa, dan domain baru terus bermunculan (termasuk domain kloning yang
  *   sengaja dibuat untuk menghindari blokir).
  * - Text-matching lewat Accessibility API (baca address bar Chrome) TIDAK
@@ -24,20 +24,28 @@ package com.mas.tgblocker
  */
 object AdultDomainList {
     val DOMAINS: Set<String> = setOf(
-        "pornhub.com",
-        "xvideos.com",
-        "xnxx.com",
-        "xhamster.com",
-        "redtube.com",
-        "youporn.com",
-        "spankbang.com",
-        "chaturbate.com",
-        "onlyfans.com",
-        "stripchat.com",
-        "brazzers.com",
-        "livejasmin.com",
-        "motherless.com",
-        "rule34.xxx",
-        "fapello.com"
+        // Tube / streaming umum
+        "pornhub.com", "xvideos.com", "xnxx.com", "xhamster.com", "redtube.com",
+        "youporn.com", "spankbang.com", "tnaflix.com", "tube8.com", "eporner.com",
+        "txxx.com", "drtuber.com", "sunporno.com", "porn.com", "beeg.com",
+        "xxxbunker.com", "pornone.com", "porntrex.com", "hqporner.com",
+        "thumbzilla.com", "vporn.com", "keezmovies.com", "spankwire.com",
+        "pornhd.com", "hclips.com",
+
+        // Cam / live
+        "chaturbate.com", "stripchat.com", "livejasmin.com", "bongacams.com",
+        "myfreecams.com", "cam4.com", "camsoda.com", "flirt4free.com",
+        "streamate.com", "camwhores.tv",
+
+        // Kreator / subscription
+        "onlyfans.com", "fansly.com",
+
+        // Hentai / anime dewasa
+        "rule34.xxx", "nhentai.net", "e-hentai.org", "hanime.tv",
+        "hentaihaven.xxx",
+
+        // Lain-lain yang cukup dikenal
+        "motherless.com", "fapello.com", "erome.com", "imagefap.com",
+        "brazzers.com", "javhd.com", "missav.com"
     )
 }
