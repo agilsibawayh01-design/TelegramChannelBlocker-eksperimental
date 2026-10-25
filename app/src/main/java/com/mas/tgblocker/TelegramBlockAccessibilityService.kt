@@ -59,6 +59,14 @@ import androidx.annotation.RequiresApi
  * Detector TIDAK PERNAH aktif kalau modelnya belum dipasang pengguna sendiri
  * di assets — lihat TfliteImageContentDetector.kt untuk detail & keterbatasan.
  *
+ * UPGRADE Gabungan Safe Telegram (additive, tidak mengubah logic di atas):
+ * - Blokir Global Search Telegram, dipindah dari aplikasi Safe Telegram versi
+ *   fungsional — lihat [GlobalSearchGuard]. Aktif di mode NORMAL dan STRICT,
+ *   hanya untuk [OFFICIAL_PACKAGE]. Dicek lebih dulu sebelum deteksi channel.
+ * - Mode STRICT menjaga halaman Pengaturan milik aplikasi ini sendiri (detail
+ *   Aksesibilitas, Info Aplikasi/Copot, Admin Perangkat) — lihat
+ *   [StrictSettingsGuard]. Pengaturan lain tetap bebas dibuka.
+ *
  * CATATAN PENTING soal cakupan: accessibility_service_config.xml TIDAK lagi
  * membatasi android:packageNames ke daftar tetap, supaya pengguna bisa
  * menambah aplikasi kustom secara dinamis tanpa perlu build ulang APK.
@@ -80,6 +88,10 @@ class TelegramBlockAccessibilityService : AccessibilityService() {
     private var imageContentDetector: ImageContentDetector? = null
 
     private val mainHandler = Handler(Looper.getMainLooper())
+
+    // Debounce BACK untuk Global Search dan untuk penjaga Pengaturan (Mode Ketat).
+    private var lastSearchBackAt = 0L
+    private var lastSettingsBackAt = 0L
 
     // Package yang lagi di foreground, diupdate dari SETIAP accessibility
     // event yang masuk (lihat handleAccessibilityEvent). Dipakai loop
@@ -143,6 +155,9 @@ class TelegramBlockAccessibilityService : AccessibilityService() {
         // Satu-satunya browser yang diizinkan.
         private const val CHROME_PACKAGE = "com.android.chrome"
 
+        // Jeda minimum antar BACK dari penjaga Pengaturan (Mode Ketat).
+        private const val SETTINGS_BACK_DEBOUNCE_MS = 600L
+
         // Browser lain yang DIKENAL — langsung ditendang ke Home seperti klon
         // Telegram. Non-exhaustive by design (lihat komentar kelas di atas);
         // browser di luar daftar ini bisa ditambahkan lewat Custom Package.
@@ -200,7 +215,7 @@ class TelegramBlockAccessibilityService : AccessibilityService() {
 
     override fun onDestroy() {
         super.onDestroy()
-        mainHandler.removeCallbacks(imageSamplingLoop)
+        mainHandler.removeCallbacksAndMessages(null)
         imageContentDetector?.close()
     }
 
@@ -238,11 +253,27 @@ class TelegramBlockAccessibilityService : AccessibilityService() {
         // diabaikan TOTAL di sini, tanpa membaca layar sama sekali.
         val isOfficial = pkg == OFFICIAL_PACKAGE
         val isChrome = pkg == CHROME_PACKAGE
-        val isCloneOrCustom = !isOfficial && !isChrome &&
+        val isSettings = pkg in StrictSettingsGuard.SETTINGS_PACKAGES
+        val isCloneOrCustom = !isOfficial && !isChrome && !isSettings &&
             (pkg in CLONE_PACKAGES || pkg in BROWSER_BLOCK_PACKAGES || pkg in repository.getCustomPackages())
-        if (!isOfficial && !isChrome && !isCloneOrCustom) return
+        if (!isOfficial && !isChrome && !isSettings && !isCloneOrCustom) return
 
-        if (repository.getMode() == BlockingMode.OFF) return
+        val mode = repository.getMode()
+        if (mode == BlockingMode.OFF) return
+
+        // Pengaturan Android: hanya dijaga saat Mode Ketat, lalu selesai.
+        if (isSettings) {
+            if (mode == BlockingMode.STRICT) guardSettingsPage()
+            return
+        }
+
+        // Klik hanya relevan untuk pencarian di Telegram resmi (tipe event ini
+        // baru ditambahkan untuk Global Search). Untuk Chrome, abaikan supaya
+        // perilakunya sama persis dengan sebelumnya.
+        if (event.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED) {
+            if (isOfficial) handlePossibleSearchTap(event)
+            return
+        }
 
         // Aplikasi klon, browser terlarang, atau aplikasi kustom: langsung
         // tendang ke Home, tidak perlu baca layar sama sekali.
@@ -288,6 +319,13 @@ class TelegramBlockAccessibilityService : AccessibilityService() {
         val root = rootInActiveWindow ?: return
 
         try {
+            // Global Search (dari Safe Telegram): dicek lebih dulu dan tidak
+            // bergantung pada isi daftar channel.
+            if (GlobalSearchGuard.containsGlobalSearchSignature(root)) {
+                bounceBackFromGlobalSearch()
+                return
+            }
+
             val screenTexts = ChannelDetector.collectTexts(root)
             if (screenTexts.normalized.isEmpty()) return
 
@@ -313,6 +351,75 @@ class TelegramBlockAccessibilityService : AccessibilityService() {
                     return
                 }
             }
+        } finally {
+            root.recycle()
+        }
+    }
+
+    // ----- Global Search (dipindah dari Safe Telegram) -----
+
+    private fun handlePossibleSearchTap(event: AccessibilityEvent) {
+        val source = event.source ?: return
+        val looksLikeSearchEntry = GlobalSearchGuard.isSearchEntryPoint(source)
+        source.recycle()
+        if (!looksLikeSearchEntry) return
+
+        mainHandler.postDelayed({ checkGlobalSearchNow() }, GlobalSearchGuard.POST_CLICK_CHECK_DELAY_MS)
+    }
+
+    private fun checkGlobalSearchNow() {
+        try {
+            if (repository.getMode() == BlockingMode.OFF) return
+            val root = rootInActiveWindow ?: return
+            try {
+                // Pastikan jendela aktif memang Telegram resmi (bukan aplikasi
+                // lain yang terbuka selama jeda).
+                if (root.packageName?.toString() != OFFICIAL_PACKAGE) return
+                if (GlobalSearchGuard.containsGlobalSearchSignature(root)) {
+                    bounceBackFromGlobalSearch()
+                }
+            } finally {
+                root.recycle()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error saat cek Global Search", e)
+        }
+    }
+
+    /** Senyap: tanpa toast, dialog, getar, atau suara. */
+    private fun bounceBackFromGlobalSearch() {
+        val now = System.currentTimeMillis()
+        if (now - lastSearchBackAt < GlobalSearchGuard.BACK_DEBOUNCE_MS) return
+        lastSearchBackAt = now
+        Log.d(TAG, "Global Search terdeteksi, menjalankan BACK")
+        performGlobalAction(GLOBAL_ACTION_BACK)
+        mainHandler.postDelayed(
+            { performGlobalAction(GLOBAL_ACTION_BACK) },
+            GlobalSearchGuard.SECOND_BACK_DELAY_MS
+        )
+    }
+
+    // ----- Mode Ketat: jaga halaman Pengaturan milik aplikasi ini -----
+
+    private fun guardSettingsPage() {
+        val root = rootInActiveWindow ?: return
+        try {
+            val rootPkg = root.packageName?.toString() ?: return
+            if (rootPkg !in StrictSettingsGuard.SETTINGS_PACKAGES) return
+
+            val texts = ChannelDetector.collectTexts(root).raw
+            val protectedPage = StrictSettingsGuard.isProtectedPage(
+                screenTexts = texts,
+                appLabel = getString(R.string.app_name),
+                serviceDescription = getString(R.string.accessibility_service_description)
+            )
+            if (!protectedPage) return
+
+            val now = System.currentTimeMillis()
+            if (now - lastSettingsBackAt < SETTINGS_BACK_DEBOUNCE_MS) return
+            lastSettingsBackAt = now
+            Log.d(TAG, "Mode Ketat: halaman pengaturan aplikasi ini terdeteksi, menjalankan BACK")
+            performGlobalAction(GLOBAL_ACTION_BACK)
         } finally {
             root.recycle()
         }
