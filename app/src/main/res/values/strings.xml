@@ -1,6 +1,6 @@
 <resources>
     <string name="app_name">Telegram Channel Blocker</string>
-    <string name="accessibility_service_description">Secara teknis bisa mengakses semua aplikasi, tapi HANYA memproses aplikasi Telegram resmi (untuk mendeteksi channel di daftar blokir Anda) dan aplikasi klon/kustom yang Anda daftarkan sendiri di dalam aplikasi ini (untuk ditutup otomatis). Aplikasi lain di luar itu diabaikan sepenuhnya oleh kode aplikasi.</string>
+    <string name="accessibility_service_description">Secara teknis bisa mengakses semua aplikasi, tapi HANYA memproses aplikasi Telegram resmi (untuk mendeteksi channel di daftar blokir Anda) dan aplikasi klon/kustom yang Anda daftarkan sendiri di dalam aplikasi ini (untuk ditutup otomatis). Juga memblokir pencarian global Telegram, dan pada Mode Ketat menjaga halaman pengaturan aplikasi ini sendiri agar tidak dimatikan atau dihapus. Aplikasi lain di luar itu diabaikan sepenuhnya oleh kode aplikasi.</string>
 
     <string name="status_active">AKTIF</string>
     <string name="status_inactive">NONAKTIF</string>
