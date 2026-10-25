@@ -1,5 +1,16 @@
 # Telegram Channel Blocker
 
+> **Gabungan Safe Telegram** (varian eksperimental + NSFW tetap utuh).
+> Package tetap `com.mas.tgblocker`, jadi bisa dipasang menimpa versi lama.
+>
+> - **Blokir Global Search Telegram** (dari Safe Telegram versi fungsional, logika deteksi sama persis).
+>   Aktif di mode Normal dan Ketat; mode Mati menonaktifkan semuanya. Lihat `GlobalSearchGuard.kt`.
+> - **Mode Ketat menjaga halaman Pengaturan aplikasi ini sendiri**: saklar Aksesibilitas,
+>   Info Aplikasi (Copot/Paksa berhenti/Nonaktifkan), dan halaman Admin Perangkat. Halaman lain
+>   di Pengaturan tetap bebas dibuka. Lihat `StrictSettingsGuard.kt`.
+> - Cuma satu layanan Aksesibilitas yang perlu aktif. **Safe Telegram lama boleh dicopot.**
+
+
 Aplikasi Android baru dan terpisah total dari proyek SafeTelegram sebelumnya.
 Memblokir channel Telegram tertentu (berdasarkan daftar `@username` yang Anda
 kelola sendiri) menggunakan AccessibilityService — tanpa server, tanpa akun,
