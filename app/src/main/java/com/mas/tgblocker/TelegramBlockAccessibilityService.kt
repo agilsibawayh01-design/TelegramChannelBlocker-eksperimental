@@ -67,7 +67,7 @@ import androidx.annotation.RequiresApi
  *   Aksesibilitas, Info Aplikasi/Copot, Admin Perangkat) — lihat
  *   [StrictSettingsGuard]. Pengaturan lain tetap bebas dibuka.
  *
- * UPGRADE Mode Mati mengunci Chrome dan Play Store: kalau mode OFF, Chrome
+ * UPGRADE: saat aplikasi Penjaga Ketat Mode OFF (lihat [PenjagaKetatLink]), Chrome
  * ([CHROME_PACKAGE]) dan Play Store ([PLAY_STORE_PACKAGE]) langsung ditendang ke
  * Home. Di mode NORMAL/STRICT keduanya kembali normal (Chrome lewat cek domain
  * dan konten seperti biasa, Play Store bebas kecuali didaftarkan sebagai
@@ -274,11 +274,14 @@ class TelegramBlockAccessibilityService : AccessibilityService() {
         if (!isOfficial && !isChrome && !isSettings && !isPlayStore && !isCloneOrCustom) return
 
         val mode = repository.getMode()
-        if (mode == BlockingMode.OFF) {
-            // Mode Mati: pemblokiran biasa dijeda, TAPI Chrome dan Play Store dikunci.
-            if (isChrome || isPlayStore) kickHomeWhileOff(pkg)
+        // Penjaga Ketat sedang Mode OFF (jeda): Chrome dan Play Store dikunci,
+        // apa pun mode aplikasi ini.
+        if ((isChrome || isPlayStore) && PenjagaKetatLink.isPaused(this)) {
+            kickHomeWhileOff(pkg)
             return
         }
+
+        if (mode == BlockingMode.OFF) return
 
         // Play Store di mode NORMAL/STRICT bebas, kecuali pengguna sendiri
         // mendaftarkannya sebagai aplikasi tambahan (isCloneOrCustom).

@@ -27,7 +27,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
-import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.textfield.TextInputEditText
 import com.mas.tgblocker.databinding.ActivityMainBinding
@@ -82,8 +81,6 @@ class MainActivity : AppCompatActivity() {
             onEdit = { channel -> guardIfStrict { showEditDialog(channel) } },
             onDelete = { channel -> guardIfStrict { deleteChannel(channel) } }
         )
-        binding.rvChannels.layoutManager = LinearLayoutManager(this)
-        binding.rvChannels.adapter = adapter
 
         setupModeToggle()
 
@@ -159,9 +156,26 @@ class MainActivity : AppCompatActivity() {
 
     // ===================== Daftar & status =====================
 
+    /**
+     * Menampilkan SEMUA baris adapter di dalam LinearLayout. Halaman utama
+     * sudah bisa di-scroll, jadi daftar tidak perlu RecyclerView sendiri
+     * (yang sebelumnya bisa terpotong tingginya di dalam ScrollView).
+     */
+    @Suppress("UNCHECKED_CAST")
+    private fun renderRows(container: android.widget.LinearLayout, rowAdapter: androidx.recyclerview.widget.RecyclerView.Adapter<*>) {
+        val a = rowAdapter as androidx.recyclerview.widget.RecyclerView.Adapter<androidx.recyclerview.widget.RecyclerView.ViewHolder>
+        container.removeAllViews()
+        for (i in 0 until a.itemCount) {
+            val holder = a.createViewHolder(container, a.getItemViewType(i))
+            a.bindViewHolder(holder, i)
+            container.addView(holder.itemView)
+        }
+    }
+
     private fun refreshList() {
         val channels = repository.getChannels()
         adapter.submitList(channels)
+        renderRows(binding.rvChannels, adapter)
         binding.tvEmpty.visibility = if (channels.isEmpty()) View.VISIBLE else View.GONE
         binding.tvChannelCount.text = getString(R.string.count_channels, channels.size)
     }
@@ -539,14 +553,13 @@ class MainActivity : AppCompatActivity() {
         packageAdapter = PackageAdapter(
             onDelete = { pkg -> guardIfStrict { deleteCustomPackage(pkg) } }
         )
-        binding.rvPackages.layoutManager = LinearLayoutManager(this)
-        binding.rvPackages.adapter = packageAdapter
         binding.btnAddPackage.setOnClickListener { showAddPackageDialog() }
     }
 
     private fun refreshPackages() {
         val packages = repository.getCustomPackages()
         packageAdapter.submitList(packages)
+        renderRows(binding.rvPackages, packageAdapter)
         binding.tvEmptyPackages.visibility = if (packages.isEmpty()) View.VISIBLE else View.GONE
     }
 
@@ -619,14 +632,13 @@ class MainActivity : AppCompatActivity() {
         domainAdapter = DomainAdapter(
             onDelete = { domain -> guardIfStrict { deleteBlockedDomain(domain) } }
         )
-        binding.rvDomains.layoutManager = LinearLayoutManager(this)
-        binding.rvDomains.adapter = domainAdapter
         binding.btnAddDomain.setOnClickListener { showAddDomainDialog() }
     }
 
     private fun refreshDomains() {
         val domains = repository.getBlockedDomains()
         domainAdapter.submitList(domains)
+        renderRows(binding.rvDomains, domainAdapter)
         binding.tvEmptyDomains.visibility = if (domains.isEmpty()) View.VISIBLE else View.GONE
     }
 
