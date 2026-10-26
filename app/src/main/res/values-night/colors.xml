@@ -1,0 +1,20 @@
+<resources>
+    <color name="primary">#9CC2FF</color>
+    <color name="primary_dark">#0A305F</color>
+    <color name="on_primary">#0A2347</color>
+    <color name="primary_container">#143A6B</color>
+    <color name="accent">#7FDC92</color>
+    <color name="danger">#FF8E86</color>
+    <color name="background">#0F1217</color>
+    <color name="card_background">#1A1E26</color>
+    <color name="surface_variant">#252A34</color>
+    <color name="selected_bg">#364055</color>
+    <color name="outline">#8D96A6</color>
+    <color name="outline_soft">#2E343F</color>
+    <color name="text_primary">#E7EAF0</color>
+    <color name="text_secondary">#A3ABB9</color>
+    <color name="success_container">#16392A</color>
+    <color name="warn_container">#4A3210</color>
+    <color name="danger_container">#5A1F1B</color>
+    <color name="warn">#FFB95C</color>
+</resources>
