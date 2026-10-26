@@ -92,6 +92,8 @@ dependencies {
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.recyclerview:recyclerview:1.3.2")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
+    implementation("androidx.biometric:biometric:1.1.0")
+    implementation("androidx.work:work-runtime:2.9.1")
 
     // Content Detection (Fase 2b) - runtime untuk ImageContentDetector.
     // Library resmi Google, Apache 2.0. TIDAK membundel model apa pun -
