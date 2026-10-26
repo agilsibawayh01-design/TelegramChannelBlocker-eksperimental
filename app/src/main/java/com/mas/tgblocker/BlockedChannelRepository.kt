@@ -17,8 +17,19 @@ enum class BlockingMode { OFF, NORMAL, STRICT }
  */
 class BlockedChannelRepository(context: Context) {
 
+    private val appContext: Context = context.applicationContext
+
     private val prefs: SharedPreferences =
-        context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+    /** Memberi tahu pencadangan otomatis bahwa data berubah (digabung/ditunda di sana). */
+    private fun notifyChanged() {
+        try {
+            BackupManager.onDataChanged(appContext)
+        } catch (e: Exception) {
+            // Cadangan tidak boleh mengganggu penyimpanan data utama.
+        }
+    }
 
     fun getMode(): BlockingMode {
         val stored = prefs.getString(KEY_MODE, null)
@@ -35,6 +46,7 @@ class BlockedChannelRepository(context: Context) {
 
     fun setMode(mode: BlockingMode) {
         prefs.edit().putString(KEY_MODE, mode.name).apply()
+        notifyChanged()
     }
 
     fun getChannels(): List<BlockedChannel> {
@@ -70,6 +82,7 @@ class BlockedChannelRepository(context: Context) {
             arr.put(obj)
         }
         prefs.edit().putString(KEY_CHANNELS, arr.toString()).apply()
+        notifyChanged()
     }
 
     fun addChannel(type: ChannelType, rawValue: String): Boolean {
@@ -137,6 +150,7 @@ class BlockedChannelRepository(context: Context) {
         val arr = JSONArray()
         packages.map { it.trim() }.filter { it.isNotBlank() }.distinct().forEach { arr.put(it) }
         prefs.edit().putString(KEY_CUSTOM_PACKAGES, arr.toString()).apply()
+        notifyChanged()
     }
 
     /** Validasi longgar bentuk package name Android: dua segmen atau lebih, dipisah titik. */
@@ -183,6 +197,7 @@ class BlockedChannelRepository(context: Context) {
             .distinct()
             .forEach { arr.put(it) }
         prefs.edit().putString(KEY_BLOCKED_DOMAINS, arr.toString()).apply()
+        notifyChanged()
     }
 
     /** Validasi longgar bentuk domain: minimal ada satu titik, karakter domain valid. */
@@ -217,6 +232,7 @@ class BlockedChannelRepository(context: Context) {
 
     fun setContentDetectionEnabled(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_CONTENT_DETECTION_ENABLED, enabled).apply()
+        notifyChanged()
     }
 
     fun addDetectionLogEntry(pkg: String, detectionType: String) {
@@ -260,6 +276,7 @@ class BlockedChannelRepository(context: Context) {
 
     fun setImageDetectionEnabled(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_IMAGE_DETECTION_ENABLED, enabled).apply()
+        notifyChanged()
     }
 
     fun getImageDetectionThreshold(): Float =
@@ -267,6 +284,7 @@ class BlockedChannelRepository(context: Context) {
 
     fun setImageDetectionThreshold(threshold: Float) {
         prefs.edit().putFloat(KEY_IMAGE_DETECTION_THRESHOLD, threshold.coerceIn(0f, 1f)).apply()
+        notifyChanged()
     }
 
     // ----- Export / Import (backup teks lokal, tanpa server) -----
@@ -300,6 +318,35 @@ class BlockedChannelRepository(context: Context) {
         return obj.toString(2)
     }
 
+    /** Ringkasan isi berkas cadangan, untuk ditampilkan sebelum memulihkan. */
+    data class ImportPreview(
+        val mode: BlockingMode,
+        val channels: Int,
+        val packages: Int,
+        val domains: Int
+    )
+
+    /** Mengembalikan null kalau [json] bukan berkas cadangan yang valid. */
+    fun previewImport(json: String): ImportPreview? {
+        return try {
+            val obj = JSONObject(json)
+            if (!obj.has("channels") && !obj.has("version")) return null
+            val mode = try {
+                BlockingMode.valueOf(obj.optString("mode", BlockingMode.NORMAL.name))
+            } catch (e: Exception) {
+                BlockingMode.NORMAL
+            }
+            ImportPreview(
+                mode = mode,
+                channels = obj.optJSONArray("channels")?.length() ?: 0,
+                packages = obj.optJSONArray("customPackages")?.length() ?: 0,
+                domains = obj.optJSONArray("blockedDomains")?.length() ?: 0
+            )
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     /**
      * Mengganti SELURUH channel, mode, aplikasi tambahan, dan domain blokir
      * dengan isi [json]. Mengembalikan false (tanpa mengubah apa pun) kalau
@@ -309,6 +356,9 @@ class BlockedChannelRepository(context: Context) {
     fun importData(json: String): Boolean {
         return try {
             val obj = JSONObject(json)
+            // Tolak JSON lain yang bukan berkas cadangan aplikasi ini, supaya
+            // tidak mengosongkan data secara tidak sengaja.
+            if (!obj.has("channels") && !obj.has("version")) return false
 
             val modeStr = obj.optString("mode", BlockingMode.NORMAL.name)
             val mode = try {

@@ -67,6 +67,12 @@ import androidx.annotation.RequiresApi
  *   Aksesibilitas, Info Aplikasi/Copot, Admin Perangkat) — lihat
  *   [StrictSettingsGuard]. Pengaturan lain tetap bebas dibuka.
  *
+ * UPGRADE Mode Mati mengunci Chrome dan Play Store: kalau mode OFF, Chrome
+ * ([CHROME_PACKAGE]) dan Play Store ([PLAY_STORE_PACKAGE]) langsung ditendang ke
+ * Home. Di mode NORMAL/STRICT keduanya kembali normal (Chrome lewat cek domain
+ * dan konten seperti biasa, Play Store bebas kecuali didaftarkan sebagai
+ * aplikasi tambahan). Selain dua aplikasi itu, mode OFF tidak melakukan apa pun.
+ *
  * CATATAN PENTING soal cakupan: accessibility_service_config.xml TIDAK lagi
  * membatasi android:packageNames ke daftar tetap, supaya pengguna bisa
  * menambah aplikasi kustom secara dinamis tanpa perlu build ulang APK.
@@ -92,6 +98,7 @@ class TelegramBlockAccessibilityService : AccessibilityService() {
     // Debounce BACK untuk Global Search dan untuk penjaga Pengaturan (Mode Ketat).
     private var lastSearchBackAt = 0L
     private var lastSettingsBackAt = 0L
+    private var lastOffKickAt = 0L
 
     // Package yang lagi di foreground, diupdate dari SETIAP accessibility
     // event yang masuk (lihat handleAccessibilityEvent). Dipakai loop
@@ -157,6 +164,13 @@ class TelegramBlockAccessibilityService : AccessibilityService() {
 
         // Jeda minimum antar BACK dari penjaga Pengaturan (Mode Ketat).
         private const val SETTINGS_BACK_DEBOUNCE_MS = 600L
+
+        // Play Store: dikunci hanya saat mode OFF (lihat catatan di atas kelas).
+        private const val PLAY_STORE_PACKAGE = "com.android.vending"
+
+        // Jeda minimum antar aksi Home untuk Chrome/Play Store saat mode OFF,
+        // supaya tidak menembak berulang untuk satu rangkaian event.
+        private const val OFF_KICK_DEBOUNCE_MS = 400L
 
         // Browser lain yang DIKENAL — langsung ditendang ke Home seperti klon
         // Telegram. Non-exhaustive by design (lihat komentar kelas di atas);
@@ -254,12 +268,21 @@ class TelegramBlockAccessibilityService : AccessibilityService() {
         val isOfficial = pkg == OFFICIAL_PACKAGE
         val isChrome = pkg == CHROME_PACKAGE
         val isSettings = pkg in StrictSettingsGuard.SETTINGS_PACKAGES
+        val isPlayStore = pkg == PLAY_STORE_PACKAGE
         val isCloneOrCustom = !isOfficial && !isChrome && !isSettings &&
             (pkg in CLONE_PACKAGES || pkg in BROWSER_BLOCK_PACKAGES || pkg in repository.getCustomPackages())
-        if (!isOfficial && !isChrome && !isSettings && !isCloneOrCustom) return
+        if (!isOfficial && !isChrome && !isSettings && !isPlayStore && !isCloneOrCustom) return
 
         val mode = repository.getMode()
-        if (mode == BlockingMode.OFF) return
+        if (mode == BlockingMode.OFF) {
+            // Mode Mati: pemblokiran biasa dijeda, TAPI Chrome dan Play Store dikunci.
+            if (isChrome || isPlayStore) kickHomeWhileOff(pkg)
+            return
+        }
+
+        // Play Store di mode NORMAL/STRICT bebas, kecuali pengguna sendiri
+        // mendaftarkannya sebagai aplikasi tambahan (isCloneOrCustom).
+        if (isPlayStore && !isCloneOrCustom) return
 
         // Pengaturan Android: hanya dijaga saat Mode Ketat, lalu selesai.
         if (isSettings) {
@@ -354,6 +377,16 @@ class TelegramBlockAccessibilityService : AccessibilityService() {
         } finally {
             root.recycle()
         }
+    }
+
+    // ----- Mode Mati: Chrome dan Play Store dikunci -----
+
+    private fun kickHomeWhileOff(pkg: String) {
+        val now = System.currentTimeMillis()
+        if (now - lastOffKickAt < OFF_KICK_DEBOUNCE_MS) return
+        lastOffKickAt = now
+        Log.d(TAG, "Mode Mati: $pkg dikunci, kembali ke Home")
+        performGlobalAction(GLOBAL_ACTION_HOME)
     }
 
     // ----- Global Search (dipindah dari Safe Telegram) -----
