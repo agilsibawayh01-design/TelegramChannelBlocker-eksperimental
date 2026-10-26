@@ -77,3 +77,9 @@ app/src/main/java/com/mas/tgblocker/
 app/src/main/res/...
 .github/workflows/build.yml
 ```
+
+## v2: tampilan baru + fitur tambahan
+- Tampilan Material 3, mendukung mode terang/gelap.
+- Kunci aplikasi (PIN 4–8 digit + sidik jari opsional, kunci otomatis, jeda setelah salah PIN). Lupa PIN -> lewat gate teks acak.
+- Cadangan/pemulihan lewat pemilih file Android (pilih folder Google Drive), otomatis saat data berubah + tiap 12 jam.
+- Mode Mati: Chrome dan Play Store otomatis ditutup ke Home. Normal/Ketat: kembali normal.
