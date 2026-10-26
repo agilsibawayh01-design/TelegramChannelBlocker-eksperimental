@@ -14,7 +14,12 @@ object ImageContentDetectorFactory {
 
     fun get(context: Context): ImageContentDetector {
         return instance ?: synchronized(this) {
-            instance ?: TfliteImageContentDetector(context.applicationContext).also { instance = it }
+            instance ?: CombinedImageDetector(
+                listOf(
+                    TfliteImageContentDetector(context.applicationContext),
+                    OnnxBodyPartDetector(context.applicationContext)
+                )
+            ).also { instance = it }
         }
     }
 }
