@@ -7,12 +7,12 @@
     <string name="service_active">Aktif</string>
     <string name="service_inactive">Belum aktif</string>
 
-    <string name="label_status">Status Pemblokiran</string>
+    <string name="label_status">Mode Perlindungan</string>
     <string name="mode_off">Mati</string>
     <string name="mode_normal">Normal</string>
     <string name="mode_strict">Ketat</string>
     <string name="label_service">Accessibility Service</string>
-    <string name="label_blocked_list">Daftar Channel yang Diblokir</string>
+    <string name="label_blocked_list">Channel Diblokir</string>
 
     <string name="btn_add_channel">+ Tambah Channel</string>
     <string name="btn_edit">Edit</string>
@@ -30,7 +30,7 @@
 
     <string name="empty_list">Belum ada channel yang diblokir</string>
 
-    <string name="service_instructions">Untuk mulai memblokir, aktifkan layanan aksesibilitas aplikasi ini di:\nSetelan → Aksesibilitas → Telegram Channel Blocker → Aktifkan.</string>
+    <string name="service_instructions">Aktifkan lewat Setelan → Aksesibilitas → Telegram Channel Blocker.</string>
 
     <string name="toast_invalid_username">Username tidak valid. Gunakan format @namachannel</string>
     <string name="toast_duplicate">Channel ini sudah ada di daftar</string>
@@ -64,9 +64,9 @@
     <string name="btn_activate">Aktifkan</string>
 
     <!-- Fitur: Export / Import -->
-    <string name="label_backup">Backup Data</string>
-    <string name="btn_export">Export Data</string>
-    <string name="btn_import">Import Data</string>
+    <string name="label_backup">Cadangan &amp; Pemulihan</string>
+    <string name="btn_export">Salin sebagai teks</string>
+    <string name="btn_import">Tempel dari teks</string>
     <string name="dialog_export_title">Export Data</string>
     <string name="dialog_export_hint">Salin atau bagikan teks di bawah ini untuk menyimpan cadangan daftar channel, mode, dan aplikasi tambahan Anda saat ini. Tempel kembali lewat Import Data kapan pun diperlukan.</string>
     <string name="btn_copy">Salin</string>
@@ -90,7 +90,7 @@
     <string name="toast_invalid_domain">Domain tidak valid atau sudah ada di daftar</string>
 
     <!-- Fitur: Content Detection (Fase 2) -->
-    <string name="label_content_detection">Konten (Content Detection)</string>
+    <string name="label_content_detection">Deteksi Konten</string>
     <string name="content_detection_hint">Mendeteksi teks vulgar/NSFW di halaman Chrome dan pesan Telegram (berbasis kata kunci + threshold, murni lokal di perangkat). Deteksi GAMBAR (tanpa teks) belum aktif — butuh model AI terlatih yang belum terpasang.</string>
     <string name="switch_content_detection">Aktifkan Content Detection</string>
     <string name="btn_view_log">Lihat Log Deteksi</string>
@@ -105,4 +105,95 @@
     <string name="image_detection_status_available">Model terpasang, deteksi gambar aktif</string>
     <string name="image_detection_status_unavailable">Model belum terpasang — toggle ini belum berefek</string>
     <string name="image_detection_status_unsupported">Perangkat ini di bawah Android 11 — fitur ini tidak didukung</string>
+
+    <!-- ===== Tampilan baru: status, mode, kesiapan ===== -->
+    <string name="label_mode">Mode</string>
+    <string name="section_readiness">Kesiapan &amp; Keamanan</string>
+    <string name="label_service_row">Layanan Aksesibilitas</string>
+    <string name="btn_open">Buka</string>
+    <string name="btn_enable">Aktifkan</string>
+    <string name="btn_set">Atur</string>
+    <string name="btn_manage">Kelola</string>
+    <string name="btn_add">Tambah</string>
+    <string name="count_channels">%1$d channel</string>
+
+    <string name="hero_title_active">Perlindungan aktif</string>
+    <string name="hero_title_strict">Mode Ketat aktif</string>
+    <string name="hero_title_off">Perlindungan dijeda</string>
+    <string name="hero_title_service_off">Layanan belum aktif</string>
+    <string name="hero_sub_active">Channel, pencarian global, dan klon Telegram diblokir</string>
+    <string name="hero_sub_strict">Pengaturan aplikasi ini ikut dijaga</string>
+    <string name="hero_sub_off">Chrome dan Play Store dikunci selama mode Mati</string>
+    <string name="hero_sub_service_off">Aktifkan layanan Aksesibilitas supaya pemblokiran berjalan</string>
+    <string name="mode_desc_off">Pemblokiran dijeda. Chrome dan Play Store otomatis ditutup sampai kamu pindah ke Normal atau Ketat.</string>
+    <string name="mode_desc_normal">Channel, pencarian global, aplikasi klon, dan website diblokir. Mode bisa diubah kapan saja.</string>
+    <string name="mode_desc_strict">Perlindungan penuh. Menurunkan mode, mengedit, atau menghapus daftar harus lewat teks acak, dan halaman pengaturan aplikasi ini dijaga.</string>
+
+    <!-- ===== Kunci aplikasi ===== -->
+    <string name="label_app_lock">Kunci Aplikasi</string>
+    <string name="app_lock_active">Aktif</string>
+    <string name="app_lock_active_bio">Aktif · PIN + sidik jari</string>
+    <string name="app_lock_inactive">Nonaktif</string>
+    <string name="lock_title">Aplikasi terkunci</string>
+    <string name="lock_subtitle">Masukkan PIN untuk membuka</string>
+    <string name="lock_wrong">PIN salah</string>
+    <string name="lock_wait">Terlalu banyak percobaan. Coba lagi dalam %1$d detik</string>
+    <string name="lock_forgot">Lupa PIN?</string>
+    <string name="lock_key_delete">⌫</string>
+    <string name="lock_key_biometric">Sidik jari</string>
+    <string name="lock_biometric_title">Buka kunci aplikasi</string>
+    <string name="lock_use_pin">Pakai PIN</string>
+    <string name="lock_forgot_title">Atur ulang kunci?</string>
+    <string name="lock_forgot_message">PIN akan dihapus setelah kamu menyelesaikan teks acak berikutnya. Setelah itu kamu bisa membuat PIN baru.</string>
+    <string name="lock_menu_title">Kunci Aplikasi</string>
+    <string name="lock_menu_change">Ubah PIN</string>
+    <string name="lock_menu_biometric_on">Aktifkan sidik jari</string>
+    <string name="lock_menu_biometric_off">Matikan sidik jari</string>
+    <string name="lock_menu_autolock">Kunci otomatis: %1$s</string>
+    <string name="lock_menu_disable">Matikan kunci aplikasi</string>
+    <string name="autolock_title">Kunci otomatis setelah</string>
+    <string name="autolock_now">Langsung</string>
+    <string name="autolock_30s">30 detik</string>
+    <string name="autolock_1m">1 menit</string>
+    <string name="autolock_5m">5 menit</string>
+    <string name="dialog_pin_set_title">Atur PIN</string>
+    <string name="dialog_pin_change_title">PIN baru</string>
+    <string name="dialog_pin_current_title">Masukkan PIN saat ini</string>
+    <string name="dialog_pin_new_hint">Buat PIN 4–8 angka untuk membuka aplikasi ini.</string>
+    <string name="dialog_pin_current_hint">Konfirmasi dengan PIN yang sekarang dipakai.</string>
+    <string name="hint_pin_new">PIN baru (4–8 angka)</string>
+    <string name="hint_pin_current">PIN saat ini</string>
+    <string name="hint_pin_confirm">Ulangi PIN</string>
+    <string name="toast_pin_invalid">PIN harus 4–8 angka</string>
+    <string name="toast_pin_mismatch">Kedua PIN tidak sama</string>
+    <string name="toast_pin_wrong">PIN salah</string>
+    <string name="toast_pin_wait">Terlalu banyak percobaan. Tunggu %1$d detik</string>
+    <string name="toast_pin_saved">PIN disimpan</string>
+    <string name="toast_lock_disabled">Kunci aplikasi dimatikan</string>
+    <string name="toast_biometric_unavailable">Belum ada sidik jari yang terdaftar di perangkat ini</string>
+    <string name="btn_ok">OK</string>
+
+    <!-- ===== Backup / restore (Google Drive lewat pemilih file) ===== -->
+    <string name="backup_status_none">Belum ada lokasi cadangan</string>
+    <string name="backup_status_target">Lokasi: %1$s</string>
+    <string name="backup_last_never">Belum pernah dicadangkan</string>
+    <string name="backup_last_ok">Terakhir dicadangkan: %1$s</string>
+    <string name="backup_last_error">Cadangan terakhir gagal: %1$s</string>
+    <string name="switch_auto_backup">Cadangkan otomatis</string>
+    <string name="btn_backup_choose">Pilih lokasi cadangan (Google Drive)</string>
+    <string name="btn_backup_choose_change">Ganti lokasi cadangan</string>
+    <string name="btn_backup_now">Cadangkan sekarang</string>
+    <string name="btn_restore">Pulihkan</string>
+    <string name="backup_hint">Di pemilih file, pilih Google Drive lalu foldernya. Cadangan otomatis berjalan sekitar 15 detik setelah ada perubahan dan setiap 12 jam. PIN kunci aplikasi tidak ikut dicadangkan.</string>
+    <string name="toast_backup_ok">Cadangan tersimpan</string>
+    <string name="toast_backup_failed">Cadangan gagal: %1$s</string>
+    <string name="toast_backup_no_target">Pilih lokasi cadangan dulu</string>
+    <string name="restore_choose_title">Pulihkan dari mana?</string>
+    <string name="restore_from_current">Lokasi cadangan saat ini</string>
+    <string name="restore_from_file">Pilih file lain…</string>
+    <string name="dialog_restore_title">Pulihkan data?</string>
+    <string name="dialog_restore_message">Isi file: %1$d channel, %2$d aplikasi tambahan, %3$d domain, mode %4$s.\n\nIni MENGGANTI seluruh daftar dan pengaturan yang ada sekarang.</string>
+    <string name="btn_restore_confirm">Pulihkan</string>
+    <string name="toast_restore_invalid">File ini bukan cadangan Telegram Channel Blocker</string>
+    <string name="toast_restore_read_failed">Gagal membaca file: %1$s</string>
 </resources>
