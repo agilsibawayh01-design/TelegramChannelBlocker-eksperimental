@@ -87,6 +87,7 @@ android {
     // model apa adanya, gagal buka kalau kompres.
     androidResources {
         noCompress += "tflite"
+        noCompress += "onnx"
     }
 }
 
@@ -98,6 +99,7 @@ dependencies {
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
     implementation("androidx.biometric:biometric:1.1.0")
     implementation("androidx.work:work-runtime:2.9.1")
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.19.2")
 
     // Content Detection (Fase 2b) - runtime untuk ImageContentDetector.
     // Library resmi Google, Apache 2.0. TIDAK membundel model apa pun -
