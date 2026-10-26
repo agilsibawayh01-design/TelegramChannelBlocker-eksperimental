@@ -324,12 +324,12 @@
                                 android:text="@string/btn_add" />
                         </LinearLayout>
 
-                        <androidx.recyclerview.widget.RecyclerView
+                        <LinearLayout
                             android:id="@+id/rvChannels"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="8dp"
-                            android:nestedScrollingEnabled="false" />
+                            android:orientation="vertical" />
 
                         <TextView
                             android:id="@+id/tvEmpty"
@@ -383,12 +383,12 @@
                             android:layout_marginTop="4dp"
                             android:text="@string/custom_packages_hint" />
 
-                        <androidx.recyclerview.widget.RecyclerView
+                        <LinearLayout
                             android:id="@+id/rvPackages"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="8dp"
-                            android:nestedScrollingEnabled="false" />
+                            android:orientation="vertical" />
 
                         <TextView
                             android:id="@+id/tvEmptyPackages"
@@ -442,12 +442,12 @@
                             android:layout_marginTop="4dp"
                             android:text="@string/website_blocking_hint" />
 
-                        <androidx.recyclerview.widget.RecyclerView
+                        <LinearLayout
                             android:id="@+id/rvDomains"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="8dp"
-                            android:nestedScrollingEnabled="false" />
+                            android:orientation="vertical" />
 
                         <TextView
                             android:id="@+id/tvEmptyDomains"
