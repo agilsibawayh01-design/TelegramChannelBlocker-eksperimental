@@ -59,8 +59,12 @@ android {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            if (hasPersistentKeystore) {
-                signingConfig = signingConfigs.getByName("persistent")
+            // Release tanpa tanda tangan tidak bisa dipasang. Kalau keystore
+            // permanen tidak ada, pakai debug-keystore supaya APK tetap bisa dipasang.
+            signingConfig = if (hasPersistentKeystore) {
+                signingConfigs.getByName("persistent")
+            } else {
+                signingConfigs.getByName("debug")
             }
         }
     }
