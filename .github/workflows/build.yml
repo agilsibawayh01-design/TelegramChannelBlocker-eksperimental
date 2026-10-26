@@ -1,4 +1,4 @@
-name: Build Debug APK
+name: Build Release APK
 
 on:
   push:
@@ -39,16 +39,16 @@ jobs:
             echo "::warning::TGBLOCKER_KEYSTORE_BASE64 secret belum diset - APK akan pakai debug-keystore biasa (signature beda tiap build, harus uninstall dulu buat update)."
           fi
 
-      - name: Build debug APK
+      - name: Build release APK
         env:
           TGBLOCKER_KEYSTORE_PASSWORD: ${{ secrets.TGBLOCKER_KEYSTORE_PASSWORD }}
           TGBLOCKER_KEY_ALIAS: ${{ secrets.TGBLOCKER_KEY_ALIAS }}
           TGBLOCKER_KEY_PASSWORD: ${{ secrets.TGBLOCKER_KEY_PASSWORD }}
           TGBLOCKER_VERSION_CODE: ${{ github.run_number }}
-        run: ./gradlew assembleDebug --stacktrace
+        run: ./gradlew assembleRelease --stacktrace
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: TelegramChannelBlocker-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
+          name: TelegramChannelBlocker-release-apk
+          path: app/build/outputs/apk/release/*.apk
