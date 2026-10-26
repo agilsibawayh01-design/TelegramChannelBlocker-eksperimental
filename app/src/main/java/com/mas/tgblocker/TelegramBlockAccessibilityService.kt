@@ -168,6 +168,9 @@ class TelegramBlockAccessibilityService : AccessibilityService() {
         // Play Store: dikunci hanya saat mode OFF (lihat catatan di atas kelas).
         private const val PLAY_STORE_PACKAGE = "com.android.vending"
 
+        // Galaxy Store (Samsung): diperlakukan sama seperti Play Store.
+        private const val GALAXY_STORE_PACKAGE = "com.sec.android.app.samsungapps"
+
         // Jeda minimum antar aksi Home untuk Chrome/Play Store saat mode OFF,
         // supaya tidak menembak berulang untuk satu rangkaian event.
         private const val OFF_KICK_DEBOUNCE_MS = 400L
@@ -268,7 +271,7 @@ class TelegramBlockAccessibilityService : AccessibilityService() {
         val isOfficial = pkg == OFFICIAL_PACKAGE
         val isChrome = pkg == CHROME_PACKAGE
         val isSettings = pkg in StrictSettingsGuard.SETTINGS_PACKAGES
-        val isPlayStore = pkg == PLAY_STORE_PACKAGE
+        val isPlayStore = pkg == PLAY_STORE_PACKAGE || pkg == GALAXY_STORE_PACKAGE
         val isCloneOrCustom = !isOfficial && !isChrome && !isSettings &&
             (pkg in CLONE_PACKAGES || pkg in BROWSER_BLOCK_PACKAGES || pkg in repository.getCustomPackages())
         if (!isOfficial && !isChrome && !isSettings && !isPlayStore && !isCloneOrCustom) return
