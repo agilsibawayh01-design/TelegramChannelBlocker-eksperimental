@@ -202,6 +202,17 @@ class TelegramBlockAccessibilityService : AccessibilityService() {
             "com.android.browser"
         )
 
+        // Galeri dan pengelola file: ikut dipindai deteksi gambar. Kalau terdeteksi,
+        // langsung ke Home (bukan BACK, supaya tidak kembali ke daftar thumbnail).
+        private val GALLERY_PACKAGES = setOf(
+            "com.sec.android.gallery3d",             // Galeri Samsung
+            "com.google.android.apps.photos",        // Google Foto
+            "com.sec.android.app.myfiles",           // File Saya (Samsung)
+            "com.google.android.apps.nbu.files",     // Files by Google
+            "com.google.android.documentsui",        // Pemilih file bawaan Android
+            "com.android.documentsui"
+        )
+
         // Interval loop sampling screenshot (BUKAN per-frame/per-event) —
         // sesuai requirement performa, target realistis ~1 detik.
         private const val IMAGE_DETECTION_INTERVAL_MS = 1000L
@@ -480,7 +491,7 @@ class TelegramBlockAccessibilityService : AccessibilityService() {
         if (!detector.isAvailable()) return // model belum dipasang pengguna
 
         val pkg = currentForegroundPackage ?: return
-        val isTarget = pkg == CHROME_PACKAGE || pkg == OFFICIAL_PACKAGE
+        val isTarget = pkg == CHROME_PACKAGE || pkg == OFFICIAL_PACKAGE || pkg in GALLERY_PACKAGES
         if (!isTarget) return
 
         if (repository.getMode() == BlockingMode.OFF) return
@@ -545,11 +556,15 @@ class TelegramBlockAccessibilityService : AccessibilityService() {
 
                                 Log.d(TAG, "INFERENCE_RESULT pkg=$pkg score=$score")
                                 repository.addDetectionLogEntry(pkg, "DBG_SCORE_$score")
+                                (detector as? CombinedImageDetector)?.lastDetail?.takeIf { it.isNotEmpty() }
+                                    ?.let { repository.addDetectionLogEntry(pkg, "DBG_MODEL_$it") }
                                 val threshold = repository.getImageDetectionThreshold()
                                 if (score >= threshold) {
                                     Log.d(TAG, "BLOCK_TRIGGERED pkg=$pkg score=$score threshold=$threshold")
                                     repository.addDetectionLogEntry(pkg, "IMAGE")
-                                    performGlobalAction(GLOBAL_ACTION_BACK)
+                                    performGlobalAction(
+                                        if (pkg in GALLERY_PACKAGES) GLOBAL_ACTION_HOME else GLOBAL_ACTION_BACK
+                                    )
                                     Log.d(TAG, "BACK_EXECUTED pkg=$pkg")
                                     // Cooldown ekstra supaya tidak BACK berulang-ulang
                                     // selama konten yang sama masih di layar.
