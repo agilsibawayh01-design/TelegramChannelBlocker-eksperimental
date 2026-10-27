@@ -9,6 +9,13 @@ import android.graphics.Bitmap
  */
 class CombinedImageDetector(private val detectors: List<ImageContentDetector>) : ImageContentDetector {
 
+    /** Rincian skor per model dari pengecekan terakhir, mis. "lama=0.38 nudenet=0.79". */
+    @Volatile var lastDetail: String = ""
+        private set
+
+    private fun nameOf(d: ImageContentDetector) =
+        if (d is OnnxBodyPartDetector) "nudenet" else "lama"
+
     override fun isAvailable(): Boolean = detectors.any { it.isAvailable() }
 
     override fun detect(bitmap: Bitmap, callback: (score: Float) -> Unit) {
@@ -17,20 +24,22 @@ class CombinedImageDetector(private val detectors: List<ImageContentDetector>) :
             callback(ImageContentDetector.SCORE_UNAVAILABLE)
             return
         }
-        runNext(active, 0, bitmap, ImageContentDetector.SCORE_UNAVAILABLE, callback)
+        runNext(active, 0, bitmap, ImageContentDetector.SCORE_UNAVAILABLE, callback, StringBuilder())
     }
 
     private fun runNext(
         list: List<ImageContentDetector>, index: Int, bitmap: Bitmap,
-        best: Float, callback: (Float) -> Unit
+        best: Float, callback: (Float) -> Unit, detail: StringBuilder
     ) {
         if (index >= list.size) {
+            lastDetail = detail.toString().trim()
             callback(best)
             return
         }
         list[index].detect(bitmap) { score ->
             val next = if (score != ImageContentDetector.SCORE_UNAVAILABLE && score > best) score else best
-            runNext(list, index + 1, bitmap, next, callback)
+            detail.append(nameOf(list[index])).append('=').append(String.format(java.util.Locale.US, "%.2f", score)).append(' ')
+            runNext(list, index + 1, bitmap, next, callback, detail)
         }
     }
 
